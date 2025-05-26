@@ -1,0 +1,309 @@
+import pandas as pd
+import re
+from bs4 import BeautifulSoup
+from datetime import datetime
+import os
+
+def parse_ib_html_to_csv(html_file_path, output_csv_path=None):
+    """
+    Parse Interactive Brokers HTML statement to CSV format compatible with existing scripts.
+    
+    Args:
+        html_file_path (str): Path to the HTML file
+        output_csv_path (str): Path for output CSV file (optional)
+    
+    Returns:
+        pandas.DataFrame: Parsed transaction data
+    """
+    
+    print(f"Parsing HTML file: {html_file_path}")
+    
+    # Read HTML file
+    try:
+        with open(html_file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+    except Exception as e:
+        print(f"Error reading HTML file: {e}")
+        return None
+    
+    # Extract transactions using regex (more reliable than BeautifulSoup for this format)
+    transactions = []
+    
+    # Find all summary rows (consolidated transactions)
+    summary_row_pattern = r'<tr class="row-summary">([\s\S]*?)</tr>'
+    summary_matches = re.findall(summary_row_pattern, html_content)
+    
+    print(f"Found {len(summary_matches)} summary transactions")
+    
+    for i, row_html in enumerate(summary_matches):
+        try:
+            # Extract cell contents using regex
+            cell_pattern = r'<td[^>]*>([\s\S]*?)</td>'
+            cell_matches = re.findall(cell_pattern, row_html)
+            
+            if len(cell_matches) < 10:  # Skip malformed rows
+                continue
+            
+            # Clean cell contents
+            cells = [clean_text(cell) for cell in cell_matches]
+            
+            # Map cells to data (based on actual HTML structure):
+            # Cell 0: Account ID, Cell 1: Symbol, Cell 2: Trade Date/Time
+            # Cell 3: Settle Date, Cell 4: Exchange, Cell 5: Type
+            # Cell 6: Quantity, Cell 7: Price, Cell 8: Proceeds
+            # Cell 9: Commission, Cell 10: Fee
+            
+            symbol = cells[1]
+            trade_datetime = cells[2]
+            trade_date = parse_trade_date(trade_datetime)
+            transaction_type = cells[5]
+            quantity_text = cells[6]
+            price_text = cells[7]
+            proceeds_text = cells[8]
+            commission_text = cells[9]
+            
+            # Skip currency transactions (AUD.USD, etc.)
+            if '.' in symbol and symbol not in ['U.S', 'S.A']:
+                print(f"Skipping currency transaction: {symbol}")
+                continue
+            
+            # Parse numeric values
+            quantity = abs(parse_number(quantity_text))
+            price = abs(parse_number(price_text))
+            proceeds = parse_number(proceeds_text)
+            commission = parse_number(commission_text)
+            
+            # Adjust signs to match your CSV format:
+            # BUY: negative proceeds, negative commission
+            # SELL: positive proceeds, negative commission
+            if transaction_type == 'BUY':
+                proceeds = -abs(proceeds)
+                commission = -abs(commission)
+            elif transaction_type == 'SELL':
+                proceeds = abs(proceeds)
+                commission = -abs(commission)
+            
+            # Create transaction record matching your exact CSV format
+            transaction = {
+                'Symbol': symbol,
+                'Trade Date': trade_date,
+                'Type': transaction_type,
+                'Quantity': quantity,
+                'Price (USD)': price,
+                'Proceeds (USD)': proceeds,
+                'Commission (USD)': commission
+            }
+            
+            transactions.append(transaction)
+            print(f"Parsed: {symbol} {transaction_type} {quantity} @ ${price} on {trade_date}")
+            
+        except Exception as e:
+            print(f"Error parsing row {i+1}: {e}")
+            continue
+    
+    if not transactions:
+        print("No valid transactions found")
+        return None
+    
+    # Create DataFrame
+    df = pd.DataFrame(transactions)
+    
+    # Sort by date
+    df['Trade Date'] = pd.to_datetime(df['Trade Date'])
+    df = df.sort_values('Trade Date').reset_index(drop=True)
+    
+    # Generate output filename if not provided
+    if output_csv_path is None:
+        base_name = os.path.splitext(html_file_path)[0]
+        output_csv_path = f"{base_name}_transactions.csv"
+    
+    # Save to CSV
+    try:
+        df.to_csv(output_csv_path, index=False)
+        print(f"\nTransactions saved to: {output_csv_path}")
+    except Exception as e:
+        print(f"Error saving CSV: {e}")
+    
+    # Display summary
+    print(f"\n" + "="*60)
+    print("TRANSACTION SUMMARY")
+    print("="*60)
+    print(f"Total transactions: {len(df)}")
+    print(f"Date range: {df['Trade Date'].min().strftime('%Y-%m-%d')} to {df['Trade Date'].max().strftime('%Y-%m-%d')}")
+    print(f"Unique symbols: {len(df['Symbol'].unique())}")
+    
+    print(f"\nTransaction types:")
+    type_counts = df['Type'].value_counts()
+    for tx_type, count in type_counts.items():
+        print(f"  {tx_type}: {count}")
+    
+    print(f"\nSymbol breakdown:")
+    symbol_counts = df['Symbol'].value_counts()
+    for symbol, count in symbol_counts.items():
+        print(f"  {symbol}: {count} transactions")
+    
+    print(f"\nFirst few transactions:")
+    display_cols = ['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)', 'Proceeds (USD)']
+    print(df[display_cols].head(10).to_string(index=False))
+    
+    return df
+
+def clean_text(text):
+    """Clean and normalize text content."""
+    if not text:
+        return ""
+    # Remove HTML tags, extra whitespace, and special characters
+    text = re.sub(r'<[^>]+>', '', str(text))
+    text = re.sub(r'\s+', ' ', text).strip()
+    text = text.replace(',', '')  # Remove commas from numbers
+    return text
+
+def parse_number(text):
+    """Parse numeric values from text, handling negative signs and commas."""
+    if not text:
+        return 0
+    
+    clean_text_val = clean_text(text)
+    
+    # Handle negative values
+    is_negative = clean_text_val.startswith('-') or '(' in clean_text_val
+    
+    # Extract numeric part
+    numeric_part = re.sub(r'[^\d.]', '', clean_text_val)
+    
+    try:
+        value = float(numeric_part) if numeric_part else 0
+        return -value if is_negative else value
+    except ValueError:
+        return 0
+
+def parse_trade_date(date_text):
+    """Parse trade date from Interactive Brokers format."""
+    if not date_text:
+        return None
+    
+    # Extract date part (before comma if time is included)
+    date_part = date_text.split(',')[0].strip()
+    
+    try:
+        # Try to parse the date (format: YYYY-MM-DD)
+        return datetime.strptime(date_part, '%Y-%m-%d').strftime('%Y-%m-%d')
+    except ValueError:
+        try:
+            # Alternative format handling
+            return datetime.strptime(date_part, '%m/%d/%Y').strftime('%Y-%m-%d')
+        except ValueError:
+            print(f"Could not parse date: {date_text}")
+            return date_text
+
+def merge_multiple_csv_files(csv_files, output_merged_path):
+    """
+    Merge multiple CSV files into one consolidated file.
+    
+    Args:
+        csv_files (list): List of CSV file paths to merge
+        output_merged_path (str): Path for the merged output file
+    
+    Returns:
+        pandas.DataFrame: Merged data
+    """
+    
+    all_dataframes = []
+    
+    for csv_file in csv_files:
+        try:
+            df = pd.read_csv(csv_file)
+            df['Source_File'] = os.path.basename(csv_file)
+            all_dataframes.append(df)
+            print(f"Loaded {len(df)} transactions from {csv_file}")
+        except Exception as e:
+            print(f"Error loading {csv_file}: {e}")
+    
+    if not all_dataframes:
+        print("No CSV files loaded successfully")
+        return None
+    
+    # Combine all dataframes
+    merged_df = pd.concat(all_dataframes, ignore_index=True)
+    
+    # Sort by date
+    merged_df['Trade Date'] = pd.to_datetime(merged_df['Trade Date'])
+    merged_df = merged_df.sort_values('Trade Date').reset_index(drop=True)
+    
+    # Save merged file
+    merged_df.to_csv(output_merged_path, index=False)
+    
+    print(f"\n" + "="*60)
+    print("MERGED FILE SUMMARY")
+    print("="*60)
+    print(f"Total transactions: {len(merged_df)}")
+    print(f"Date range: {merged_df['Trade Date'].min().strftime('%Y-%m-%d')} to {merged_df['Trade Date'].max().strftime('%Y-%m-%d')}")
+    print(f"Source files: {len(csv_files)}")
+    print(f"Output file: {output_merged_path}")
+    
+    # Show transactions by year
+    merged_df['Year'] = merged_df['Trade Date'].dt.year
+    year_counts = merged_df['Year'].value_counts().sort_index()
+    print(f"\nTransactions by year:")
+    for year, count in year_counts.items():
+        print(f"  {year}: {count} transactions")
+    
+    return merged_df
+
+def main():
+    """
+    Main function to parse HTML files and create CSV compatible with existing scripts.
+    """
+    
+    # File paths - update these to match your files
+    html_files = [
+        "50074435_20230907_20240628.htm",  # The file you provided
+        # Add more HTML files here when you have them
+        # "second_year_file.htm",
+    ]
+    
+    csv_files = []
+    
+    # Parse each HTML file
+    for html_file in html_files:
+        if os.path.exists(html_file):
+            # Generate output filename
+            base_name = os.path.splitext(html_file)[0]
+            csv_output = f"{base_name}_parsed.csv"
+            
+            df = parse_ib_html_to_csv(html_file, csv_output)
+            if df is not None:
+                csv_files.append(csv_output)
+                
+                # Show sample of parsed data
+                print(f"\nSample data from {csv_output}:")
+                print(df[['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)']].head().to_string(index=False))
+        else:
+            print(f"HTML file not found: {html_file}")
+    
+    # If you have multiple CSV files, merge them
+    if len(csv_files) > 1:
+        merged_output = "all_years_transactions.csv"
+        merged_df = merge_multiple_csv_files(csv_files, merged_output)
+        
+        if merged_df is not None:
+            print(f"\n🎉 SUCCESS! Use this merged file with your existing scripts:")
+            print(f"📁 {merged_output}")
+            
+    elif len(csv_files) == 1:
+        print(f"\n🎉 SUCCESS! Use this CSV file with your existing scripts:")
+        print(f"📁 {csv_files[0]}")
+        
+        # Show how to use with existing scripts
+        print(f"\n📋 Next steps:")
+        print(f"1. Update your cost basis script to use: '{csv_files[0]}'")
+        print(f"2. Run: python cost_basis_script.py")
+        print(f"3. Run: python cgt_calculator.py")
+    else:
+        print("❌ No CSV files were created successfully")
+
+if __name__ == "__main__":
+    # Install required packages if not already installed
+    # pip install beautifulsoup4 pandas
+    
+    main()

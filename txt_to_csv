@@ -1,0 +1,49 @@
+import csv
+
+input_file = "raw_trades_2024-25.txt"  # replace with your file name
+output_file = "cleaned_trades_2024-25.csv"
+
+cleaned_rows = []
+seen_trades = set()
+
+with open(input_file, "r", encoding="utf-8") as f:
+    for line in f:
+        parts = line.strip().split()
+
+        if not parts or parts[0] != "50074435":
+            continue
+
+        try:
+            symbol = parts[1]
+            trade_date = parts[2].rstrip(",")
+            type_idx = 5 if parts[5] in ("BUY", "SELL") else 6
+            trade_type = parts[type_idx]
+            quantity = parts[type_idx + 1]
+            price = parts[type_idx + 2]
+            proceeds = parts[type_idx + 3]
+            commission = parts[type_idx + 4]
+
+            trade_id = (symbol, trade_date, trade_type, quantity)
+            if trade_id in seen_trades:
+                continue
+            seen_trades.add(trade_id)
+
+            cleaned_rows.append({
+                "Symbol": symbol,
+                "Trade Date": trade_date,
+                "Type": trade_type,
+                "Quantity": quantity.replace(",", ""),
+                "Price (USD)": price.replace(",", ""),
+                "Proceeds (USD)": proceeds.replace(",", ""),
+                "Commission (USD)": commission.replace(",", "")
+            })
+        except Exception:
+            continue
+
+# Save as CSV
+with open(output_file, "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=cleaned_rows[0].keys())
+    writer.writeheader()
+    writer.writerows(cleaned_rows)
+
+print(f"✅ Cleaned trade data saved to {output_file}")

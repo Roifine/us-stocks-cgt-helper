@@ -1,0 +1,371 @@
+import pandas as pd
+import json
+from datetime import datetime, timedelta
+import warnings
+
+def load_cost_basis_json(json_file_path):
+    """
+    Load the cost basis dictionary from JSON file.
+    
+    Args:
+        json_file_path (str): Path to the cost basis JSON file
+    
+    Returns:
+        dict: Cost basis dictionary
+    """
+    try:
+        with open(json_file_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading JSON file: {e}")
+        return None
+
+def parse_date(date_str):
+    """
+    Parse date string in DD.M.YY format to datetime object.
+    
+    Args:
+        date_str (str): Date string in DD.M.YY format
+    
+    Returns:
+        datetime: Parsed datetime object
+    """
+    try:
+        return datetime.strptime(date_str, "%d.%m.%y")
+    except:
+        try:
+            return datetime.strptime(date_str, "%d.%-m.%y")
+        except:
+            # Fallback for different formats
+            return pd.to_datetime(date_str)
+
+def days_between_dates(buy_date_str, sell_date):
+    """
+    Calculate days between buy date (string) and sell date (datetime).
+    
+    Args:
+        buy_date_str (str): Buy date in DD.M.YY format
+        sell_date (datetime): Sell date as datetime object
+    
+    Returns:
+        int: Number of days between dates
+    """
+    buy_date = parse_date(buy_date_str)
+    return (sell_date - buy_date).days
+
+def select_optimal_units_for_sale(cost_basis_records, units_needed, sell_date):
+    """
+    Select the most tax-efficient units to sell based on:
+    1. Units held > 12 months (for CGT discount) with highest price
+    2. If not enough, then units held < 12 months with highest price
+    
+    Args:
+        cost_basis_records (list): List of purchase records for the symbol
+        units_needed (float): Number of units being sold
+        sell_date (datetime): Date of the sale
+    
+    Returns:
+        tuple: (selected_units, remaining_units_needed, selections_detail)
+    """
+    # Make a copy to avoid modifying original data
+    available_records = []
+    for record in cost_basis_records:
+        if record['units'] > 0:  # Only consider records with available units
+            available_records.append({
+                'units': record['units'],
+                'price': record['price'],
+                'commission': record['commission'],
+                'date': record['date'],
+                'days_held': days_between_dates(record['date'], sell_date),
+                'long_term': days_between_dates(record['date'], sell_date) >= 365
+            })
+    
+    selected_units = []
+    remaining_units = units_needed
+    
+    # Step 1: Prioritize long-term holdings (>= 365 days) with highest price
+    long_term_records = [r for r in available_records if r['long_term']]
+    long_term_records.sort(key=lambda x: x['price'], reverse=True)  # Highest price first
+    
+    for record in long_term_records:
+        if remaining_units <= 0:
+            break
+            
+        units_to_use = min(remaining_units, record['units'])
+        
+        selected_units.append({
+            'units': units_to_use,
+            'price': record['price'],
+            'commission': record['commission'] * (units_to_use / record['units']),  # Proportional commission
+            'buy_date': record['date'],
+            'days_held': record['days_held'],
+            'long_term_eligible': True,
+            'total_cost': (units_to_use * record['price']) + (record['commission'] * (units_to_use / record['units']))
+        })
+        
+        remaining_units -= units_to_use
+        record['units'] -= units_to_use  # Update available units
+    
+    # Step 2: If still need units, use short-term holdings with highest price
+    if remaining_units > 0:
+        short_term_records = [r for r in available_records if not r['long_term'] and r['units'] > 0]
+        short_term_records.sort(key=lambda x: x['price'], reverse=True)  # Highest price first
+        
+        for record in short_term_records:
+            if remaining_units <= 0:
+                break
+                
+            units_to_use = min(remaining_units, record['units'])
+            
+            selected_units.append({
+                'units': units_to_use,
+                'price': record['price'],
+                'commission': record['commission'] * (units_to_use / record['units']),
+                'buy_date': record['date'],
+                'days_held': record['days_held'],
+                'long_term_eligible': False,
+                'total_cost': (units_to_use * record['price']) + (record['commission'] * (units_to_use / record['units']))
+            })
+            
+            remaining_units -= units_to_use
+            record['units'] -= units_to_use
+    
+    return selected_units, remaining_units, available_records
+
+def calculate_capital_gains(excel_file_path, json_file_path):
+    """
+    Calculate capital gains tax for all sales transactions.
+    
+    Args:
+        excel_file_path (str): Path to Excel file with sale transactions
+        json_file_path (str): Path to cost basis JSON file
+    
+    Returns:
+        pandas.DataFrame: DataFrame with CGT calculations
+    """
+    # Load data
+    print("Loading sales data and cost basis...")
+    sales_df = pd.read_excel(excel_file_path, sheet_name='Sale_Transactions')
+    cost_basis_dict = load_cost_basis_json(json_file_path)
+    
+    if cost_basis_dict is None:
+        print("Failed to load cost basis data")
+        return None
+    
+    print(f"Processing {len(sales_df)} sale transactions...")
+    
+    # Convert Trade Date to datetime
+    sales_df['Trade Date'] = pd.to_datetime(sales_df['Trade Date'])
+    
+    # Initialize result lists
+    cgt_records = []
+    
+    # Process each sale transaction
+    for index, sale in sales_df.iterrows():
+        symbol = sale['Symbol']
+        units_sold = abs(sale['Quantity'])
+        sale_price_per_unit = abs(sale['Price (USD)'])
+        sale_date = sale['Trade Date']
+        sale_commission = abs(sale['Commission (USD)']) if 'Commission (USD)' in sale else 0
+        total_proceeds = abs(sale['Proceeds (USD)'])
+        
+        print(f"\nProcessing sale: {units_sold} units of {symbol} on {sale_date.strftime('%d.%m.%y')}")
+        
+        # Check if symbol exists in cost basis
+        if symbol not in cost_basis_dict:
+            cgt_records.append({
+                'Symbol': symbol,
+                'Sale_Date': sale_date.strftime('%d.%m.%y'),
+                'Units_Sold': units_sold,
+                'Sale_Price_Per_Unit': sale_price_per_unit,
+                'Sale_Commission': sale_commission,
+                'Total_Proceeds': total_proceeds,
+                'Buy_Date': 'N/A',
+                'Buy_Price_Per_Unit': 0,
+                'Buy_Commission': 0,
+                'Days_Held': 0,
+                'Long_Term_Eligible': False,
+                'Cost_Basis': 0,
+                'Capital_Gain_Loss': total_proceeds,
+                'CGT_Discount_Eligible': False,
+                'Taxable_Gain': total_proceeds,
+                'Warning': 'NO COST BASIS DATA FOUND',
+                'Units_Used': 0,
+                'Missing_Units': units_sold
+            })
+            continue
+        
+        # Select optimal units for this sale
+        selected_units, missing_units, _ = select_optimal_units_for_sale(
+            cost_basis_dict[symbol], units_sold, sale_date
+        )
+        
+        if not selected_units:
+            cgt_records.append({
+                'Symbol': symbol,
+                'Sale_Date': sale_date.strftime('%d.%m.%y'),
+                'Units_Sold': units_sold,
+                'Sale_Price_Per_Unit': sale_price_per_unit,
+                'Sale_Commission': sale_commission,
+                'Total_Proceeds': total_proceeds,
+                'Buy_Date': 'N/A',
+                'Buy_Price_Per_Unit': 0,
+                'Buy_Commission': 0,
+                'Days_Held': 0,
+                'Long_Term_Eligible': False,
+                'Cost_Basis': 0,
+                'Capital_Gain_Loss': total_proceeds,
+                'CGT_Discount_Eligible': False,
+                'Taxable_Gain': total_proceeds,
+                'Warning': 'NO UNITS AVAILABLE IN COST BASIS',
+                'Units_Used': 0,
+                'Missing_Units': units_sold
+            })
+            continue
+        
+        # Create detailed records for each cost basis used
+        for unit_selection in selected_units:
+            # Calculate proportional proceeds for this portion
+            proportion = unit_selection['units'] / units_sold
+            proportional_proceeds = total_proceeds * proportion
+            proportional_sale_commission = sale_commission * proportion
+            
+            # Calculate gain/loss
+            cost_basis = unit_selection['total_cost']
+            net_proceeds = proportional_proceeds - proportional_sale_commission
+            capital_gain_loss = net_proceeds - cost_basis
+            
+            # Apply CGT discount if eligible (50% discount for assets held > 12 months in Australia)
+            cgt_discount_eligible = unit_selection['long_term_eligible']
+            taxable_gain = capital_gain_loss
+            if cgt_discount_eligible and capital_gain_loss > 0:
+                taxable_gain = capital_gain_loss * 0.5  # 50% CGT discount
+            
+            # Prepare warning messages
+            warning_msg = ""
+            if missing_units > 0:
+                warning_msg += f"MISSING {missing_units:.2f} UNITS FOR COST BASIS"
+            if not unit_selection['long_term_eligible']:
+                if warning_msg:
+                    warning_msg += "; "
+                warning_msg += "SHORT TERM HOLDING (<12 months)"
+            
+            cgt_records.append({
+                'Symbol': symbol,
+                'Sale_Date': sale_date.strftime('%d.%m.%y'),
+                'Units_Sold': unit_selection['units'],
+                'Sale_Price_Per_Unit': sale_price_per_unit,
+                'Sale_Commission': proportional_sale_commission,
+                'Total_Proceeds': proportional_proceeds,
+                'Buy_Date': unit_selection['buy_date'],
+                'Buy_Price_Per_Unit': unit_selection['price'],
+                'Buy_Commission': unit_selection['commission'],
+                'Days_Held': unit_selection['days_held'],
+                'Long_Term_Eligible': unit_selection['long_term_eligible'],
+                'Cost_Basis': cost_basis,
+                'Capital_Gain_Loss': capital_gain_loss,
+                'CGT_Discount_Eligible': cgt_discount_eligible,
+                'Taxable_Gain': taxable_gain,
+                'Warning': warning_msg if warning_msg else '',
+                'Units_Used': unit_selection['units'],
+                'Missing_Units': missing_units if missing_units > 0 else 0
+            })
+    
+    return pd.DataFrame(cgt_records)
+
+def create_cgt_report(excel_file_path, json_file_path, output_file_path=None):
+    """
+    Create a comprehensive CGT report with detailed calculations.
+    
+    Args:
+        excel_file_path (str): Path to Excel file with transactions
+        json_file_path (str): Path to cost basis JSON file  
+        output_file_path (str): Path for output Excel file (optional)
+    
+    Returns:
+        pandas.DataFrame: CGT calculations DataFrame
+    """
+    
+    cgt_df = calculate_capital_gains(excel_file_path, json_file_path)
+    
+    if cgt_df is None or cgt_df.empty:
+        print("No CGT calculations to process")
+        return None
+    
+    # Generate summary statistics
+    print("\n" + "="*80)
+    print("CAPITAL GAINS TAX SUMMARY")
+    print("="*80)
+    
+    total_capital_gains = cgt_df['Capital_Gain_Loss'].sum()
+    total_taxable_gains = cgt_df['Taxable_Gain'].sum()
+    total_long_term_eligible = cgt_df[cgt_df['CGT_Discount_Eligible'] == True]['Capital_Gain_Loss'].sum()
+    
+    print(f"Total Capital Gains/Losses: ${total_capital_gains:,.2f} USD")
+    print(f"Total Taxable Gains (after CGT discount): ${total_taxable_gains:,.2f} USD")
+    print(f"Long-term gains eligible for 50% discount: ${total_long_term_eligible:,.2f} USD")
+    
+    # Warning summary
+    warnings_df = cgt_df[cgt_df['Warning'] != '']
+    if not warnings_df.empty:
+        print(f"\nWARNINGS: {len(warnings_df)} transactions have issues:")
+        for warning_type in warnings_df['Warning'].unique():
+            count = len(warnings_df[warnings_df['Warning'].str.contains(warning_type)])
+            print(f"  - {warning_type}: {count} transactions")
+    
+    # Save to Excel
+    if output_file_path is None:
+        output_file_path = excel_file_path.replace('.xlsx', '_CGT_Analysis.xlsx')
+    
+    try:
+        with pd.ExcelWriter(output_file_path, engine='openpyxl') as writer:
+            # Main CGT calculations
+            cgt_df.to_excel(writer, sheet_name='CGT_Calculations', index=False)
+            
+            # Summary by symbol
+            symbol_summary = cgt_df.groupby('Symbol').agg({
+                'Units_Sold': 'sum',
+                'Total_Proceeds': 'sum',
+                'Cost_Basis': 'sum',
+                'Capital_Gain_Loss': 'sum',
+                'Taxable_Gain': 'sum'
+            }).round(2)
+            symbol_summary.to_excel(writer, sheet_name='Summary_by_Symbol')
+            
+            # Warnings only
+            if not warnings_df.empty:
+                warnings_df.to_excel(writer, sheet_name='Warnings', index=False)
+        
+        print(f"\nCGT analysis saved to: {output_file_path}")
+        
+    except Exception as e:
+        print(f"Error saving Excel file: {e}")
+    
+    return cgt_df
+
+def main():
+    """
+    Main function to run CGT calculations.
+    """
+    # File paths - update these to match your files
+    excel_file = "cleaned_trades_202425_Transactions_FY2024-25.xlsx"
+    json_file = "cost_basis_dictionary.json"
+    
+    print("Starting Capital Gains Tax Analysis...")
+    print("-" * 50)
+    
+    cgt_df = create_cgt_report(excel_file, json_file)
+    
+    if cgt_df is not None:
+        print("\nCGT Analysis completed successfully!")
+        
+        # Show sample results
+        print("\nSample CGT calculations:")
+        sample_cols = ['Symbol', 'Sale_Date', 'Units_Sold', 'Capital_Gain_Loss', 'Taxable_Gain', 'Warning']
+        print(cgt_df[sample_cols].head(10).to_string(index=False))
+        
+    else:
+        print("CGT Analysis failed. Please check your input files.")
+
+if __name__ == "__main__":
+    main()
