@@ -1,0 +1,478 @@
+{
+  "SQ": [
+    {
+      "type": "BUY",
+      "units": 100.0,
+      "price": 51.79,
+      "commission": 10.36,
+      "proceeds": -5178.75,
+      "date": "18.9.23",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "RSKD": [
+    {
+      "type": "BUY",
+      "units": 1500.0,
+      "price": 4.41,
+      "commission": 13.23,
+      "proceeds": -6615.0,
+      "date": "18.9.23",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "SPLK": [
+    {
+      "type": "BUY",
+      "units": 70.0,
+      "price": 144.63,
+      "commission": 20.25,
+      "proceeds": -10124.1,
+      "date": "21.9.23",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 220.0,
+      "price": 155.4,
+      "commission": 68.38,
+      "proceeds": 34188.0,
+      "date": "16.2.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "S": [
+    {
+      "type": "SELL",
+      "units": 800.0,
+      "price": 17.0,
+      "commission": 27.2,
+      "proceeds": 13600.0,
+      "date": "29.9.23",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "HOOD": [
+    {
+      "type": "BUY",
+      "units": 600.0,
+      "price": 11.55,
+      "commission": 13.86,
+      "proceeds": -6930.0,
+      "date": "11.12.23",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 550.0,
+      "price": 23.0,
+      "commission": 25.3,
+      "proceeds": 12650.0,
+      "date": "06.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 550.0,
+      "price": 37.5,
+      "commission": 41.25,
+      "proceeds": 20625.0,
+      "date": "20.11.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "CFLT": [
+    {
+      "type": "BUY",
+      "units": 350.0,
+      "price": 21.91,
+      "commission": 15.34,
+      "proceeds": -7668.5,
+      "date": "03.1.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "BUY",
+      "units": 220.0,
+      "price": 36.51,
+      "commission": 16.06,
+      "proceeds": -8032.2,
+      "date": "13.2.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "BUY",
+      "units": 430.0,
+      "price": 21.35,
+      "commission": 18.36,
+      "proceeds": -9180.5,
+      "date": "08.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "NET": [
+    {
+      "type": "SELL",
+      "units": 200.0,
+      "price": 112.0,
+      "commission": 44.8,
+      "proceeds": 22400.0,
+      "date": "09.2.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 113.0,
+      "price": 157.0,
+      "commission": 35.48,
+      "proceeds": 17741.0,
+      "date": "07.2.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "BUY",
+      "units": 150.0,
+      "price": 99.0,
+      "commission": 29.7,
+      "proceeds": -14850.0,
+      "date": "04.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 100.0,
+      "price": 124.0,
+      "commission": 24.8,
+      "proceeds": 12400.0,
+      "date": "01.5.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "ESTC": [
+    {
+      "type": "SELL",
+      "units": 100.0,
+      "price": 132.85,
+      "commission": 26.57,
+      "proceeds": 13285.0,
+      "date": "15.2.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 100.0,
+      "price": 89.68,
+      "commission": 17.94,
+      "proceeds": 8968.0,
+      "date": "12.5.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "CP": [
+    {
+      "type": "SELL",
+      "units": 74.0,
+      "price": 81.94,
+      "commission": 12.13,
+      "proceeds": 6063.56,
+      "date": "17.5.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "CSX": [
+    {
+      "type": "SELL",
+      "units": 180.0,
+      "price": 32.2,
+      "commission": 11.59,
+      "proceeds": 5796.0,
+      "date": "17.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "NVAX": [
+    {
+      "type": "SELL",
+      "units": 15.0,
+      "price": 14.7,
+      "commission": 9.95,
+      "proceeds": 220.5,
+      "date": "17.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "KWEB": [
+    {
+      "type": "SELL",
+      "units": 200.0,
+      "price": 28.89,
+      "commission": 11.56,
+      "proceeds": 5778.0,
+      "date": "20.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "ASAN": [
+    {
+      "type": "SELL",
+      "units": 100.0,
+      "price": 12.1,
+      "commission": 9.95,
+      "proceeds": 1210.0,
+      "date": "21.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "AMPL": [
+    {
+      "type": "SELL",
+      "units": 605.0,
+      "price": 8.45,
+      "commission": 10.22,
+      "proceeds": 5112.25,
+      "date": "21.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "BASE": [
+    {
+      "type": "SELL",
+      "units": 200.0,
+      "price": 18.0,
+      "commission": 9.95,
+      "proceeds": 3600.0,
+      "date": "27.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "EMLC": [
+    {
+      "type": "SELL",
+      "units": 300.0,
+      "price": 23.8,
+      "commission": 14.28,
+      "proceeds": 7140.0,
+      "date": "28.6.24",
+      "source_file": "50074435_20230907_20240628_parsed.csv"
+    }
+  ],
+  "CYBR": [
+    {
+      "type": "SELL",
+      "units": 60.0,
+      "price": 270.0,
+      "commission": 32.4,
+      "proceeds": 16200.0,
+      "date": "02.7.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "SNOW": [
+    {
+      "type": "BUY",
+      "units": 90.0,
+      "price": 141.9,
+      "commission": 25.54,
+      "proceeds": -12771.0,
+      "date": "03.7.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "TAL": [
+    {
+      "type": "SELL",
+      "units": 500.0,
+      "price": 12.43,
+      "commission": 12.43,
+      "proceeds": 6215.0,
+      "date": "30.9.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "PD": [
+    {
+      "type": "SELL",
+      "units": 150.0,
+      "price": 18.0,
+      "commission": 9.95,
+      "proceeds": 2700.0,
+      "date": "09.10.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "FRSH": [
+    {
+      "type": "SELL",
+      "units": 980.0,
+      "price": 11.1,
+      "commission": 21.76,
+      "proceeds": 10878.0,
+      "date": "09.10.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "AEIS": [
+    {
+      "type": "BUY",
+      "units": 120.0,
+      "price": 107.26,
+      "commission": 25.74,
+      "proceeds": -12871.2,
+      "date": "09.10.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "LRN": [
+    {
+      "type": "BUY",
+      "units": 102.0,
+      "price": 67.0,
+      "commission": 13.67,
+      "proceeds": -6834.0,
+      "date": "16.10.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 200.0,
+      "price": 102.0,
+      "commission": 40.8,
+      "proceeds": 20400.0,
+      "date": "08.11.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "PAYO": [
+    {
+      "type": "SELL",
+      "units": 800.0,
+      "price": 10.0,
+      "commission": 16.0,
+      "proceeds": 8000.0,
+      "date": "05.11.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "HUBS": [
+    {
+      "type": "SELL",
+      "units": 45.0,
+      "price": 695.0,
+      "commission": 62.55,
+      "proceeds": 31275.0,
+      "date": "12.11.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "TWLO": [
+    {
+      "type": "SELL",
+      "units": 150.0,
+      "price": 115.0,
+      "commission": 34.5,
+      "proceeds": 17250.0,
+      "date": "12.12.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "SPXU": [
+    {
+      "type": "BUY",
+      "units": 1000.0,
+      "price": 22.45,
+      "commission": 44.9,
+      "proceeds": -22450.0,
+      "date": "19.12.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 1000.0,
+      "price": 31.3,
+      "commission": 62.6,
+      "proceeds": 31300.0,
+      "date": "04.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "BUY",
+      "units": 500.0,
+      "price": 22.68,
+      "commission": 22.68,
+      "proceeds": -11340.0,
+      "date": "01.5.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "BUY",
+      "units": 500.0,
+      "price": 19.7,
+      "commission": 19.7,
+      "proceeds": -9850.0,
+      "date": "14.5.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "BA": [
+    {
+      "type": "BUY",
+      "units": 50.0,
+      "price": 177.61,
+      "commission": 17.76,
+      "proceeds": -8880.5,
+      "date": "19.12.24",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "FROG": [
+    {
+      "type": "SELL",
+      "units": 150.0,
+      "price": 37.1,
+      "commission": 11.13,
+      "proceeds": 5565.0,
+      "date": "07.2.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "TSM": [
+    {
+      "type": "BUY",
+      "units": 80.0,
+      "price": 134.64,
+      "commission": 21.54,
+      "proceeds": -10771.2,
+      "date": "07.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 80.0,
+      "price": 158.0,
+      "commission": 25.28,
+      "proceeds": 12640.0,
+      "date": "09.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ],
+  "NVDA": [
+    {
+      "type": "BUY",
+      "units": 120.0,
+      "price": 87.46,
+      "commission": 20.99,
+      "proceeds": -10495.2,
+      "date": "07.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    },
+    {
+      "type": "SELL",
+      "units": 120.0,
+      "price": 107.0,
+      "commission": 25.68,
+      "proceeds": 12840.0,
+      "date": "09.4.25",
+      "source_file": "50074435_20240701_20250527_parsed.csv"
+    }
+  ]
+}

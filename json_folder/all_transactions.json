@@ -1,0 +1,478 @@
+{
+  "SQ": [
+    {
+      "units": 100.0,
+      "price": 51.7875,
+      "commission": 10.36,
+      "date": "18.9.23",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "RSKD": [
+    {
+      "units": 1500.0,
+      "price": 4.41,
+      "commission": 13.23,
+      "date": "18.9.23",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "SPLK": [
+    {
+      "units": 70.0,
+      "price": 144.63,
+      "commission": 20.25,
+      "date": "21.9.23",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 220.0,
+      "price": 155.4,
+      "commission": 68.38,
+      "date": "16.2.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "S": [
+    {
+      "units": 800.0,
+      "price": 17.0,
+      "commission": 27.2,
+      "date": "29.9.23",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "HOOD": [
+    {
+      "units": 600.0,
+      "price": 11.55,
+      "commission": 13.86,
+      "date": "11.12.23",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 550.0,
+      "price": 23.0,
+      "commission": 25.3,
+      "date": "06.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 550.0,
+      "price": 37.5,
+      "commission": 41.25,
+      "date": "20.11.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "CFLT": [
+    {
+      "units": 350.0,
+      "price": 21.91,
+      "commission": 15.34,
+      "date": "03.1.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 220.0,
+      "price": 36.51,
+      "commission": 16.06,
+      "date": "13.2.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 430.0,
+      "price": 21.35,
+      "commission": 18.36,
+      "date": "08.4.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "NET": [
+    {
+      "units": 200.0,
+      "price": 112.0,
+      "commission": 44.8,
+      "date": "09.2.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 113.0,
+      "price": 157.0,
+      "commission": 35.48,
+      "date": "07.2.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 150.0,
+      "price": 99.0,
+      "commission": 29.7,
+      "date": "04.4.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 100.0,
+      "price": 124.0,
+      "commission": 24.8,
+      "date": "01.5.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "ESTC": [
+    {
+      "units": 100.0,
+      "price": 132.85,
+      "commission": 26.57,
+      "date": "15.2.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 100.0,
+      "price": 89.68,
+      "commission": 17.94,
+      "date": "12.5.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "CP": [
+    {
+      "units": 74.0,
+      "price": 81.94,
+      "commission": 12.13,
+      "date": "17.5.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "CSX": [
+    {
+      "units": 180.0,
+      "price": 32.2,
+      "commission": 11.59,
+      "date": "17.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "NVAX": [
+    {
+      "units": 15.0,
+      "price": 14.7,
+      "commission": 9.95,
+      "date": "17.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "KWEB": [
+    {
+      "units": 200.0,
+      "price": 28.89,
+      "commission": 11.56,
+      "date": "20.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "ASAN": [
+    {
+      "units": 100.0,
+      "price": 12.1,
+      "commission": 9.95,
+      "date": "21.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "AMPL": [
+    {
+      "units": 605.0,
+      "price": 8.45,
+      "commission": 10.22,
+      "date": "21.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "BASE": [
+    {
+      "units": 200.0,
+      "price": 18.0,
+      "commission": 9.95,
+      "date": "27.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "EMLC": [
+    {
+      "units": 300.0,
+      "price": 23.8,
+      "commission": 14.28,
+      "date": "28.6.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "CYBR": [
+    {
+      "units": 60.0,
+      "price": 270.0,
+      "commission": 32.4,
+      "date": "02.7.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "SNOW": [
+    {
+      "units": 90.0,
+      "price": 141.9,
+      "commission": 25.54,
+      "date": "03.7.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "TAL": [
+    {
+      "units": 500.0,
+      "price": 12.43,
+      "commission": 12.43,
+      "date": "30.9.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "PD": [
+    {
+      "units": 150.0,
+      "price": 18.0,
+      "commission": 9.95,
+      "date": "09.10.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "FRSH": [
+    {
+      "units": 980.0,
+      "price": 11.1,
+      "commission": 21.76,
+      "date": "09.10.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "AEIS": [
+    {
+      "units": 120.0,
+      "price": 107.26,
+      "commission": 25.74,
+      "date": "09.10.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "LRN": [
+    {
+      "units": 102.0,
+      "price": 67.0,
+      "commission": 13.67,
+      "date": "16.10.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 200.0,
+      "price": 102.0,
+      "commission": 40.8,
+      "date": "08.11.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "PAYO": [
+    {
+      "units": 800.0,
+      "price": 10.0,
+      "commission": 16.0,
+      "date": "05.11.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "HUBS": [
+    {
+      "units": 45.0,
+      "price": 695.0,
+      "commission": 62.55,
+      "date": "12.11.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "TWLO": [
+    {
+      "units": 150.0,
+      "price": 115.0,
+      "commission": 34.5,
+      "date": "12.12.24",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "SPXU": [
+    {
+      "units": 1000.0,
+      "price": 22.45,
+      "commission": 44.9,
+      "date": "19.12.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 1000.0,
+      "price": 31.3,
+      "commission": 62.6,
+      "date": "04.4.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 500.0,
+      "price": 22.68,
+      "commission": 22.68,
+      "date": "01.5.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 500.0,
+      "price": 19.7,
+      "commission": 19.7,
+      "date": "14.5.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "BA": [
+    {
+      "units": 50.0,
+      "price": 177.61,
+      "commission": 17.76,
+      "date": "19.12.24",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "FROG": [
+    {
+      "units": 150.0,
+      "price": 37.1,
+      "commission": 11.13,
+      "date": "07.2.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "TSM": [
+    {
+      "units": 80.0,
+      "price": 134.64,
+      "commission": 21.54,
+      "date": "07.4.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 80.0,
+      "price": 158.0,
+      "commission": 25.28,
+      "date": "09.4.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ],
+  "NVDA": [
+    {
+      "units": 120.0,
+      "price": 87.46,
+      "commission": 20.99,
+      "date": "07.4.25",
+      "transaction_type": "BUY",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    },
+    {
+      "units": 120.0,
+      "price": 107.0,
+      "commission": 25.68,
+      "date": "09.4.25",
+      "transaction_type": "SELL",
+      "source_file": "all_years_transactions.csv",
+      "processed_date": "2025-05-26 19:31:55"
+    }
+  ]
+}

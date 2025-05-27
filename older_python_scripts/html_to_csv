@@ -257,7 +257,8 @@ def main():
     
     # File paths - update these to match your files
     html_files = [
-        "50074435_20230907_20240628.htm",  # The file you provided
+        "50074435_20230907_20240628.htm",  
+        "50074435_20240701_20250527.htm",# The file you provided
         # Add more HTML files here when you have them
         # "second_year_file.htm",
     ]

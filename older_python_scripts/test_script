@@ -6,10 +6,6 @@ output_file = "cleaned_trades_2023-24.csv" # Desired output CSV
 cleaned_rows = []
 seen_trades = set()
 
-with open(input_file, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-    for i, line in enumerate(lines[:5]):
-        print(f"Line {i+1}: {line}")
 
 with open(input_file, "r", encoding="utf-8") as f:
     for line in f:
