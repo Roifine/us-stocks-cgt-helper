@@ -2,7 +2,7 @@
 """
 Australian CGT Calculator - Streamlit Web App
 
-Upload Interactive Brokers HTML statements and get optimized Australian CGT calculations.
+Upload HTML trading statements and get optimized Australian CGT calculations.
 """
 
 import streamlit as st
@@ -48,6 +48,9 @@ if 'excel_data' not in st.session_state:
     st.session_state.excel_data = None
 if 'filename' not in st.session_state:
     st.session_state.filename = None
+
+# Hard-coded financial year
+FINANCIAL_YEAR = "2024-25"
 
 def validate_html_files(uploaded_files):
     """Validate uploaded HTML files."""
@@ -176,11 +179,6 @@ def create_excel_download(cgt_df, financial_year, temp_dir):
             }
             summary_df = pd.DataFrame(summary_data)
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
-            
-            # Warnings sheet (if any)
-            warnings_data = cgt_df[cgt_df['Warning'] != '']
-            if len(warnings_data) > 0:
-                warnings_data.to_excel(writer, sheet_name='Warnings', index=False)
         
         # Read file for download
         with open(excel_path, 'rb') as f:
@@ -197,18 +195,20 @@ def main():
     
     # Header
     st.title("🇦🇺 Australian CGT Calculator")
-    st.markdown("Upload your Interactive Brokers HTML statements to calculate optimized Australian Capital Gains Tax")
+    st.markdown("Upload your HTML trading statements to calculate optimized Australian Capital Gains Tax for **FY 2024-25** (July 1, 2024 - June 30, 2025)")
     
     if not SCRIPTS_AVAILABLE:
         st.stop()
     
     # File upload section
     st.header("📁 Upload HTML Statements")
+    
+    # Enhanced file uploader with drag & drop styling
     uploaded_files = st.file_uploader(
-        "Select Interactive Brokers HTML statement files (maximum 5 files)",
+        "Drag and drop your HTML trading statement files here, or click to browse (maximum 5 files)",
         type=['html', 'htm'],
         accept_multiple_files=True,
-        help="Upload your Interactive Brokers HTML trading statements"
+        help="Upload your HTML trading statement files. Drag and drop multiple files or click to select them."
     )
     
     # Validate files
@@ -223,25 +223,11 @@ def main():
             # Show file details
             with st.expander("📋 File Details"):
                 for file in uploaded_files:
-                    st.text(f"• {file.name} ({file.size:,} bytes)")
-    
-    # Configuration section
-    st.header("⚙️ Configuration")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        financial_year = st.selectbox(
-            "Financial Year",
-            ["2024-25", "2023-24", "2025-26", "2022-23"],
-            index=0,
-            help="Australian financial year (July 1 - June 30)"
-        )
-    
-    with col2:
-        st.info(f"Processing sales from FY {financial_year}")
+                    file_size_mb = file.size / (1024 * 1024)
+                    st.text(f"• {file.name} ({file_size_mb:.1f} MB)")
     
     # Processing section
-    if uploaded_files and st.button("🔄 Process Files", type="primary", use_container_width=True):
+    if uploaded_files and st.button("🔄 Calculate CGT", type="primary", use_container_width=True):
         
         # Reset session state
         st.session_state.processing_complete = False
@@ -261,14 +247,14 @@ def main():
                 
                 # Step 2: Create cost basis and sales data
                 with st.spinner("Step 2/4: Creating cost basis dictionary..."):
-                    result = create_cost_basis_and_sales(csv_files, financial_year, temp_dir)
+                    result = create_cost_basis_and_sales(csv_files, FINANCIAL_YEAR, temp_dir)
                     
                     if len(result) == 3:  # No sales found
                         cost_basis_dict, sales_df, cost_basis_path = result
-                        st.warning("⚠️ No sales transactions found for the selected financial year")
+                        st.warning("⚠️ No sales transactions found for FY 2024-25")
                         st.info("This might mean:")
-                        st.info("• No sales occurred in the selected financial year")
-                        st.info("• Try selecting a different financial year")
+                        st.info("• No sales occurred in FY 2024-25 (July 1, 2024 - June 30, 2025)")
+                        st.info("• Check that your HTML files contain sales from this period")
                         st.stop()
                     else:
                         cost_basis_dict, sales_df, cost_basis_path, sales_path = result
@@ -276,7 +262,7 @@ def main():
                 # Step 3: Calculate CGT
                 with st.spinner("Step 3/4: Calculating optimized CGT..."):
                     cgt_df, remaining_cost_basis, warnings_list = calculate_cgt_optimized(
-                        sales_df, cost_basis_dict, financial_year
+                        sales_df, cost_basis_dict, FINANCIAL_YEAR
                     )
                 
                 if cgt_df is None:
@@ -285,7 +271,7 @@ def main():
                 
                 # Step 4: Create Excel file
                 with st.spinner("Step 4/4: Creating Excel report..."):
-                    excel_data, filename = create_excel_download(cgt_df, financial_year, temp_dir)
+                    excel_data, filename = create_excel_download(cgt_df, FINANCIAL_YEAR, temp_dir)
                 
                 if excel_data is None:
                     st.error("❌ Excel file creation failed")
@@ -311,10 +297,9 @@ def main():
     
     # Results section
     if st.session_state.processing_complete and st.session_state.cgt_results:
-        st.header("📊 Results")
+        st.header("📊 CGT Results for FY 2024-25")
         
         cgt_df = st.session_state.cgt_results['cgt_df']
-        warnings = st.session_state.cgt_results['warnings']
         
         # Summary metrics
         total_gain = cgt_df['Capital_Gain_Loss'].sum()
@@ -336,7 +321,7 @@ def main():
             st.metric(
                 "Taxable Gains",
                 f"${taxable_gain:,.2f}",
-                help="Taxable gains after 50% CGT discount applied"
+                help="Taxable gains after 50% CGT discount applied to long-term holdings"
             )
         
         with col3:
@@ -368,12 +353,6 @@ def main():
             st.success("✅ Your CGT report is ready for download!")
             st.info("💡 This Excel file contains detailed CGT calculations formatted for Australian tax reporting")
         
-        # Warnings section
-        if warnings:
-            with st.expander(f"⚠️ Warnings ({len(warnings)})", expanded=True):
-                for warning in warnings:
-                    st.warning(warning)
-        
         # Optional: Show detailed data
         if st.checkbox("Show detailed CGT calculations"):
             st.subheader("Detailed CGT Calculations")
@@ -389,8 +368,8 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        "💡 **Tips:** This calculator optimizes your CGT by prioritizing long-term holdings "
-        "and highest cost basis purchases to minimize your tax liability."
+        "💡 **Tax Optimization:** This calculator prioritizes long-term holdings (>12 months) "
+        "and highest cost basis purchases to minimize your Australian CGT liability for FY 2024-25."
     )
 
 if __name__ == "__main__":
