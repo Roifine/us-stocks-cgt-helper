@@ -1,0 +1,295 @@
+{
+  "SQ": [
+    {
+      "units": 40.0,
+      "price": 164.315,
+      "commission": 30.0,
+      "price_aud": 227.8987517337032,
+      "commission_aud": 41.608876560332874,
+      "exchange_rate": 0.721,
+      "date": "23.12.21"
+    },
+    {
+      "units": 100.0,
+      "price": 51.7875,
+      "commission": 10.36,
+      "price_aud": 80.35298681148177,
+      "commission_aud": 16.074476338246704,
+      "exchange_rate": 0.6445,
+      "date": "18.9.23"
+    }
+  ],
+  "RSKD": [
+    {
+      "units": 350.0,
+      "price": 26.84,
+      "commission": 30.0,
+      "price_aud": 35.1400890285415,
+      "commission_aud": 39.27729772191673,
+      "exchange_rate": 0.7638,
+      "date": "08.4.21"
+    },
+    {
+      "units": 1000.0,
+      "price": 9.02,
+      "commission": 30.0,
+      "price_aud": 11.632705700283724,
+      "commission_aud": 38.68970853752902,
+      "exchange_rate": 0.7754,
+      "date": "12.6.21"
+    },
+    {
+      "units": 1500.0,
+      "price": 4.41,
+      "commission": 13.23,
+      "price_aud": 6.8425135764158265,
+      "commission_aud": 20.52754072924748,
+      "exchange_rate": 0.6445,
+      "date": "18.9.23"
+    }
+  ],
+  "CFLT": [
+    {
+      "units": 150.0,
+      "price": 38.5,
+      "commission": 30.0,
+      "price_aud": 52.1468237843695,
+      "commission_aud": 40.633888663145065,
+      "exchange_rate": 0.7383,
+      "date": "29.7.21"
+    },
+    {
+      "units": 350.0,
+      "price": 21.91,
+      "commission": 15.34,
+      "price_aud": 32.39686529646607,
+      "commission_aud": 22.68224160875351,
+      "exchange_rate": 0.6763,
+      "date": "03.1.24"
+    },
+    {
+      "units": 220.0,
+      "price": 36.51,
+      "commission": 16.06,
+      "price_aud": 57.98919949174078,
+      "commission_aud": 25.50825921219822,
+      "exchange_rate": 0.6296,
+      "date": "13.2.25"
+    },
+    {
+      "units": 430.0,
+      "price": 21.35,
+      "commission": 18.36,
+      "price_aud": 35.17877739331027,
+      "commission_aud": 30.252100840336134,
+      "exchange_rate": 0.6069,
+      "date": "08.4.25"
+    }
+  ],
+  "NET": [
+    {
+      "units": 37.0,
+      "price": 55.54,
+      "commission": 10.0,
+      "price_aud": 78.89204545454545,
+      "commission_aud": 14.204545454545455,
+      "exchange_rate": 0.704,
+      "date": "20.5.22"
+    },
+    {
+      "units": 300.0,
+      "price": 41.0,
+      "commission": 30.0,
+      "price_aud": 60.04686584651436,
+      "commission_aud": 43.936731107205624,
+      "exchange_rate": 0.6828,
+      "date": "11.9.22"
+    },
+    {
+      "units": 150.0,
+      "price": 99.0,
+      "commission": 29.7,
+      "price_aud": 158.80654475457172,
+      "commission_aud": 47.64196342637151,
+      "exchange_rate": 0.6234,
+      "date": "04.4.25"
+    }
+  ],
+  "ESTC": [
+    {
+      "units": 95.0,
+      "price": 80.0,
+      "commission": 30.0,
+      "price_aud": 112.1547735875508,
+      "commission_aud": 42.058040095331556,
+      "exchange_rate": 0.7133,
+      "date": "26.1.22"
+    }
+  ],
+  "SNOW": [
+    {
+      "units": 90.0,
+      "price": 141.9,
+      "commission": 25.54,
+      "price_aud": 212.64798441480593,
+      "commission_aud": 38.273640041960135,
+      "exchange_rate": 0.6673,
+      "date": "03.7.24"
+    }
+  ],
+  "AEIS": [
+    {
+      "units": 120.0,
+      "price": 107.26,
+      "commission": 25.74,
+      "price_aud": 158.99792469611623,
+      "commission_aud": 38.15594426326712,
+      "exchange_rate": 0.6746,
+      "date": "09.10.24"
+    }
+  ],
+  "LRN": [
+    {
+      "units": 102.0,
+      "price": 67.0,
+      "commission": 13.67,
+      "price_aud": 100.13450904199671,
+      "commission_aud": 20.43042893438948,
+      "exchange_rate": 0.6691,
+      "date": "16.10.24"
+    }
+  ],
+  "BA": [
+    {
+      "units": 50.0,
+      "price": 177.61,
+      "commission": 17.76,
+      "price_aud": 285.27144233858013,
+      "commission_aud": 28.52553806617411,
+      "exchange_rate": 0.6226,
+      "date": "19.12.24"
+    }
+  ],
+  "SPXU": [
+    {
+      "units": 500.0,
+      "price": 22.68,
+      "commission": 22.68,
+      "price_aud": 35.47075383171724,
+      "commission_aud": 35.47075383171724,
+      "exchange_rate": 0.6394,
+      "date": "01.5.25"
+    },
+    {
+      "units": 500.0,
+      "price": 19.7,
+      "commission": 19.7,
+      "price_aud": 30.438813349814584,
+      "commission_aud": 30.438813349814584,
+      "exchange_rate": 0.6472,
+      "date": "14.5.25"
+    }
+  ],
+  "MDB": [
+    {
+      "units": 40.0,
+      "price": 145.0,
+      "commission": 13.333333333333334,
+      "price_aud": 212.36086701816052,
+      "commission_aud": 19.52743604764694,
+      "exchange_rate": 0.6828,
+      "date": "11.9.22"
+    }
+  ],
+  "SHOP": [
+    {
+      "units": 500.0,
+      "price": 36.3,
+      "commission": 25.0,
+      "price_aud": 51.5625,
+      "commission_aud": 35.51136363636364,
+      "exchange_rate": 0.704,
+      "date": "20.5.22"
+    }
+  ],
+  "PUBM": [
+    {
+      "units": 150.0,
+      "price": 35.4,
+      "commission": 30.0,
+      "price_aud": 45.92035283434946,
+      "commission_aud": 38.91555324944869,
+      "exchange_rate": 0.7709,
+      "date": "13.5.21"
+    },
+    {
+      "units": 180.0,
+      "price": 34.4,
+      "commission": 30.0,
+      "price_aud": 44.582685329186106,
+      "commission_aud": 38.88024883359254,
+      "exchange_rate": 0.7716,
+      "date": "15.6.21"
+    },
+    {
+      "units": 180.0,
+      "price": 33.0,
+      "commission": 30.0,
+      "price_aud": 44.4624090541633,
+      "commission_aud": 40.42037186742118,
+      "exchange_rate": 0.7422,
+      "date": "07.9.21"
+    }
+  ],
+  "OKTA": [
+    {
+      "units": 30.0,
+      "price": 222.0,
+      "commission": 30.0,
+      "price_aud": 287.7138413685848,
+      "commission_aud": 38.88024883359254,
+      "exchange_rate": 0.7716,
+      "date": "15.6.21"
+    },
+    {
+      "units": 25.0,
+      "price": 210.0,
+      "commission": 30.0,
+      "price_aud": 282.9044860568504,
+      "commission_aud": 40.41492657955005,
+      "exchange_rate": 0.7423,
+      "date": "03.9.21"
+    },
+    {
+      "units": 145.0,
+      "price": 72.69,
+      "commission": 30.0,
+      "price_aud": 109.12775859480557,
+      "commission_aud": 45.03828254015913,
+      "exchange_rate": 0.6661,
+      "date": "06.7.23"
+    }
+  ],
+  "RBLX": [
+    {
+      "units": 500.0,
+      "price": 31.6,
+      "commission": 30.0,
+      "price_aud": 44.88636363636364,
+      "commission_aud": 42.61363636363637,
+      "exchange_rate": 0.704,
+      "date": "20.5.22"
+    }
+  ],
+  "TWLO": [
+    {
+      "units": 150.0,
+      "price": 43.0,
+      "commission": 30.0,
+      "price_aud": 62.975981253661395,
+      "commission_aud": 43.936731107205624,
+      "exchange_rate": 0.6828,
+      "date": "11.9.22"
+    }
+  ]
+}
