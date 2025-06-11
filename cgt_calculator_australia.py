@@ -1,646 +1,674 @@
 #!/usr/bin/env python3
 """
-Australian CGT Calculator & Optimizer
+CGT Optimizer - Compare FIFO vs Tax-Optimal CGT Strategies
 
-This script takes:
-1. Sales CSV from current financial year
-2. Cost basis dictionary JSON
-
-And produces:
-1. Excel sheet with Australian CGT calculations (sales matched to optimal purchases)
-2. Updated cost basis dictionary JSON (remaining units after sales)
-
-Features:
-- Tax-optimized matching (prioritizes long-term holdings for CGT discount)
-- Australian CGT rules (50% discount for >12 months)
-- Warnings for insufficient cost basis
-- Remaining cost basis tracking
-
-Usage:
-    python cgt_calculator_australia.py
+This script:
+1. Loads your unified cost basis JSON
+2. Extracts FY 24-25 sales from HTML files
+3. Applies FIFO vs Tax-Optimal matching
+4. Shows potential tax savings
 """
 
-import pandas as pd
 import json
+import pandas as pd
+import numpy as np
 import os
+import glob
+import re
 from datetime import datetime, timedelta
-import warnings
+from collections import deque
+import copy
 
-# For Excel writing
-try:
-    import openpyxl
-    EXCEL_AVAILABLE = True
-except ImportError:
-    EXCEL_AVAILABLE = False
-    print("⚠️ openpyxl not installed. Excel files will not be created.")
-    print("Install with: pip install openpyxl")
+# Import HTML parsing functions from your unified script
+def clean_text(text):
+    """Clean and normalize text content."""
+    if not text:
+        return ""
+    text = re.sub(r'<[^>]+>', '', str(text))
+    text = re.sub(r'\s+', ' ', text).strip()
+    text = text.replace(',', '')
+    return text
 
-def load_sales_csv(file_path):
-    """
-    Load sales transactions from CSV or Excel file.
+def parse_number(text):
+    """Parse numeric values from text, handling negative signs and commas."""
+    if not text:
+        return 0
     
-    Args:
-        file_path (str): Path to the sales CSV or Excel file
+    clean_text_val = clean_text(text)
+    is_negative = clean_text_val.startswith('-') or '(' in clean_text_val
+    numeric_part = re.sub(r'[^\d.]', '', clean_text_val)
     
-    Returns:
-        pandas.DataFrame: Sales transactions
-    """
     try:
-        # Check file extension
-        if file_path.lower().endswith('.xlsx') or file_path.lower().endswith('.xls'):
-            # Load Excel file
-            print(f"📊 Detected Excel file: {file_path}")
-            
-            # Try to read the Excel file, looking for sheets with sales data
-            try:
-                # First, try to get sheet names
-                xl_file = pd.ExcelFile(file_path)
-                sheet_names = xl_file.sheet_names
-                print(f"   📋 Available sheets: {sheet_names}")
-                
-                # Look for sales sheet
-                sales_sheet = None
-                for sheet in sheet_names:
-                    if 'sales' in sheet.lower() or 'fy' in sheet.lower():
-                        sales_sheet = sheet
-                        break
-                
-                if sales_sheet:
-                    print(f"   📄 Using sheet: {sales_sheet}")
-                    df = pd.read_excel(file_path, sheet_name=sales_sheet)
-                else:
-                    print(f"   📄 Using first sheet: {sheet_names[0]}")
-                    df = pd.read_excel(file_path, sheet_name=0)
-                    
-            except Exception as e:
-                print(f"   ⚠️ Error reading Excel sheets, trying default: {e}")
-                df = pd.read_excel(file_path)
-        else:
-            # Load CSV file
-            print(f"📄 Detected CSV file: {file_path}")
-            df = pd.read_csv(file_path)
-        
-        # Standardize column names and data
-        print(f"   📊 Loaded {len(df)} rows with columns: {list(df.columns)}")
-        
-        # Convert Trade Date to datetime if it exists
-        if 'Trade Date' in df.columns:
-            df['Trade Date'] = pd.to_datetime(df['Trade Date'])
-        elif 'Date' in df.columns:
-            df['Trade Date'] = pd.to_datetime(df['Date'])
-        else:
-            # Look for any date-like column
-            date_columns = [col for col in df.columns if 'date' in col.lower()]
-            if date_columns:
-                df['Trade Date'] = pd.to_datetime(df[date_columns[0]])
-                print(f"   📅 Using {date_columns[0]} as Trade Date")
-        
-        # Sort by date and reset index
-        if 'Trade Date' in df.columns:
-            df = df.sort_values('Trade Date').reset_index(drop=True)
-        
-        print(f"✅ Successfully loaded {len(df)} sales transactions from {file_path}")
-        
-        # Show sample of data
-        print(f"   📋 Sample columns: {list(df.columns)[:8]}")
-        if len(df) > 0:
-            print(f"   📋 Sample data:")
-            for col in ['Symbol', 'Units_Sold', 'Trade Date', 'Sale_Price_Per_Unit'][:4]:
-                if col in df.columns:
-                    print(f"      {col}: {df[col].iloc[0]}")
-        
-        return df
-        
-    except Exception as e:
-        print(f"❌ Error loading sales file: {e}")
-        print(f"   💡 Make sure the file exists and contains sales transaction data")
-        return None
+        value = float(numeric_part) if numeric_part else 0
+        return -value if is_negative else value
+    except ValueError:
+        return 0
 
-def load_cost_basis_json(json_file_path):
-    """
-    Load cost basis dictionary from JSON file.
+def parse_trade_date(date_text):
+    """Parse trade date from Interactive Brokers format."""
+    if not date_text:
+        return None
     
-    Args:
-        json_file_path (str): Path to the cost basis JSON file
+    # Handle full datetime strings like "2024-07-02 09:31:33"
+    date_part = date_text.split(' ')[0].strip()  # Get just the date part
     
-    Returns:
-        dict: Cost basis dictionary
-    """
     try:
-        with open(json_file_path, 'r') as f:
-            cost_basis_dict = json.load(f)
-        print(f"✅ Loaded cost basis for {len(cost_basis_dict)} symbols from {json_file_path}")
-        return cost_basis_dict
-    except Exception as e:
-        print(f"❌ Error loading cost basis JSON: {e}")
-        return None
+        return datetime.strptime(date_part, '%Y-%m-%d')
+    except ValueError:
+        try:
+            return datetime.strptime(date_part, '%m/%d/%Y')
+        except ValueError:
+            print(f"⚠️ Could not parse date: {date_text}")
+            return None
 
-def parse_date(date_str):
-    """
-    Parse date string in DD.M.YY format to datetime object.
-    
-    Args:
-        date_str (str): Date string in DD.M.YY format
-    
-    Returns:
-        datetime: Parsed datetime object
-    """
+def parse_date_flexible(date_str):
+    """Parse dates in DD.M.YY format to datetime."""
     try:
         return datetime.strptime(date_str, "%d.%m.%y")
     except:
         try:
             return datetime.strptime(date_str, "%d.%-m.%y")
         except:
-            # Fallback for different formats
-            return pd.to_datetime(date_str)
+            return datetime.strptime(date_str, "%Y-%m-%d")
 
-def days_between_dates(buy_date_str, sell_date):
-    """
-    Calculate days between buy date (string) and sell date (datetime).
+def load_cost_basis_json(json_file):
+    """Load unified cost basis JSON."""
+    print(f"📊 Loading cost basis from: {json_file}")
     
-    Args:
-        buy_date_str (str): Buy date in DD.M.YY format
-        sell_date (datetime): Sell date as datetime object
-    
-    Returns:
-        int: Number of days between dates
-    """
-    buy_date = parse_date(buy_date_str)
-    return (sell_date - buy_date).days
+    try:
+        with open(json_file, 'r') as f:
+            cost_basis_dict = json.load(f)
+        
+        print(f"✅ Loaded cost basis for {len(cost_basis_dict)} symbols")
+        
+        # Show summary
+        total_units = 0
+        total_value = 0
+        for symbol, records in cost_basis_dict.items():
+            symbol_units = sum(r['units'] for r in records)
+            symbol_value = sum(r['units'] * r['price'] for r in records)
+            total_units += symbol_units
+            total_value += symbol_value
+            print(f"   {symbol}: {symbol_units:,.0f} units, ${symbol_value:,.0f} value")
+        
+        print(f"📈 Total: {total_units:,.0f} units, ${total_value:,.0f} cost basis")
+        return cost_basis_dict
+        
+    except Exception as e:
+        print(f"❌ Error loading cost basis: {e}")
+        return None
 
-def select_optimal_units_for_cgt(cost_basis_records, units_needed, sell_date):
-    """
-    Select the most tax-efficient units to sell for Australian CGT:
-    1. Prioritize units held > 12 months (for 50% CGT discount)
-    2. Within long-term holdings, select highest cost basis first (minimize gain)
-    3. If not enough long-term, use short-term with highest cost basis
+def extract_fy_sales(html_folder, financial_year="2024-25"):
+    """Extract sales from specific financial year from HTML files."""
+    print(f"\n📉 EXTRACTING FY {financial_year} SALES")
+    print("=" * 50)
     
-    Args:
-        cost_basis_records (list): List of purchase records for the symbol
-        units_needed (float): Number of units being sold
-        sell_date (datetime): Date of the sale
+    # Define FY dates
+    if financial_year == "2024-25":
+        fy_start = datetime(2024, 7, 1)
+        fy_end = datetime(2025, 6, 30)
+    elif financial_year == "2023-24":
+        fy_start = datetime(2023, 7, 1)
+        fy_end = datetime(2024, 6, 30)
+    else:
+        print(f"❌ Unsupported financial year: {financial_year}")
+        return None
     
-    Returns:
-        tuple: (selected_units, remaining_units_needed, updated_records)
-    """
-    # Make a copy to avoid modifying original data
-    available_records = []
-    for record in cost_basis_records:
-        if record['units'] > 0:  # Only consider records with available units
-            available_records.append({
-                'units': record['units'],
-                'price': record['price'],
-                'commission': record['commission'],
-                'date': record['date'],
-                'days_held': days_between_dates(record['date'], sell_date),
-                'long_term': days_between_dates(record['date'], sell_date) >= 365,
-                'total_cost_per_unit': record['price'] + (record['commission'] / record['units'])
-            })
+    print(f"📅 FY {financial_year}: {fy_start.strftime('%Y-%m-%d')} to {fy_end.strftime('%Y-%m-%d')}")
     
-    selected_units = []
-    remaining_units = units_needed
+    # Find HTML files
+    html_files = []
+    for ext in ['*.htm', '*.html']:
+        html_files.extend(glob.glob(os.path.join(html_folder, ext)))
     
-    # Step 1: Prioritize long-term holdings (>= 365 days) with highest cost basis first
-    long_term_records = [r for r in available_records if r['long_term']]
-    long_term_records.sort(key=lambda x: x['total_cost_per_unit'], reverse=True)  # Highest cost first
+    print(f"📄 Found {len(html_files)} HTML files")
     
-    for record in long_term_records:
-        if remaining_units <= 0:
-            break
-            
-        units_to_use = min(remaining_units, record['units'])
+    all_sales = []
+    
+    for html_file in html_files:
+        print(f"\n🔄 Processing {os.path.basename(html_file)}...")
         
-        selected_units.append({
-            'units': units_to_use,
-            'price': record['price'],
-            'commission': record['commission'] * (units_to_use / record['units']),  # Proportional commission
-            'buy_date': record['date'],
-            'days_held': record['days_held'],
-            'long_term_eligible': True,
-            'total_cost': (units_to_use * record['price']) + (record['commission'] * (units_to_use / record['units'])),
-            'cost_per_unit': record['total_cost_per_unit']
-        })
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+        except Exception as e:
+            print(f"❌ Error reading {html_file}: {e}")
+            continue
         
-        remaining_units -= units_to_use
-        record['units'] -= units_to_use  # Update available units
-    
-    # Step 2: If still need units, use short-term holdings with highest cost basis
-    if remaining_units > 0:
-        short_term_records = [r for r in available_records if not r['long_term'] and r['units'] > 0]
-        short_term_records.sort(key=lambda x: x['total_cost_per_unit'], reverse=True)  # Highest cost first
+        # Find all summary rows
+        summary_row_pattern = r'<tr class="row-summary">([\s\S]*?)</tr>'
+        summary_matches = re.findall(summary_row_pattern, html_content)
         
-        for record in short_term_records:
-            if remaining_units <= 0:
-                break
+        file_sales = []
+        
+        for row_html in summary_matches:
+            try:
+                cell_pattern = r'<td[^>]*>([\s\S]*?)</td>'
+                cell_matches = re.findall(cell_pattern, row_html)
                 
-            units_to_use = min(remaining_units, record['units'])
-            
-            selected_units.append({
-                'units': units_to_use,
-                'price': record['price'],
-                'commission': record['commission'] * (units_to_use / record['units']),
-                'buy_date': record['date'],
-                'days_held': record['days_held'],
-                'long_term_eligible': False,
-                'total_cost': (units_to_use * record['price']) + (record['commission'] * (units_to_use / record['units'])),
-                'cost_per_unit': record['total_cost_per_unit']
-            })
-            
-            remaining_units -= units_to_use
-            record['units'] -= units_to_use
+                if len(cell_matches) < 10:
+                    continue
+                
+                cells = [clean_text(cell) for cell in cell_matches]
+                
+                symbol = cells[1]
+                trade_datetime = cells[2]
+                transaction_type = cells[5]
+                quantity_text = cells[6]
+                price_text = cells[7]
+                proceeds_text = cells[8]
+                commission_text = cells[9]
+                
+                # Skip if not a SELL transaction
+                if transaction_type != 'SELL':
+                    continue
+                
+                # Skip currency transactions
+                if '.' in symbol and symbol not in ['U.S', 'S.A']:
+                    continue
+                
+                # Parse date and check if in FY
+                trade_date = parse_trade_date(trade_datetime)
+                if not trade_date or trade_date < fy_start or trade_date > fy_end:
+                    continue
+                
+                # Parse values
+                quantity = abs(parse_number(quantity_text))
+                price = abs(parse_number(price_text))
+                proceeds = abs(parse_number(proceeds_text))
+                commission = abs(parse_number(commission_text))
+                
+                sale = {
+                    'symbol': symbol,
+                    'date': trade_date,
+                    'quantity': quantity,
+                    'price': price,
+                    'proceeds': proceeds,
+                    'commission': commission,
+                    'net_proceeds': proceeds - commission,
+                    'source_file': os.path.basename(html_file)
+                }
+                
+                file_sales.append(sale)
+                
+            except Exception as e:
+                continue
+        
+        if file_sales:
+            print(f"   📉 Found {len(file_sales)} sales in FY {financial_year}")
+            all_sales.extend(file_sales)
+        else:
+            print(f"   📭 No sales found in FY {financial_year}")
     
-    return selected_units, remaining_units, available_records
+    # Sort by date
+    all_sales.sort(key=lambda x: x['date'])
+    
+    print(f"\n✅ Total sales in FY {financial_year}: {len(all_sales)}")
+    
+    # Show summary by symbol
+    if all_sales:
+        sales_by_symbol = {}
+        for sale in all_sales:
+            symbol = sale['symbol']
+            if symbol not in sales_by_symbol:
+                sales_by_symbol[symbol] = {'count': 0, 'total_units': 0, 'total_proceeds': 0}
+            sales_by_symbol[symbol]['count'] += 1
+            sales_by_symbol[symbol]['total_units'] += sale['quantity']
+            sales_by_symbol[symbol]['total_proceeds'] += sale['net_proceeds']
+        
+        print(f"\n📊 Sales by symbol:")
+        for symbol, data in sorted(sales_by_symbol.items()):
+            print(f"   {symbol}: {data['count']} sales, {data['total_units']:,.0f} units, ${data['total_proceeds']:,.0f}")
+    
+    return all_sales
 
-def calculate_australian_cgt(sales_df, cost_basis_dict):
-    """
-    Calculate Australian Capital Gains Tax for all sales transactions.
+def apply_fifo_strategy(sales, cost_basis_dict):
+    """Apply traditional FIFO strategy to match sales with cost basis."""
+    print(f"\n🔄 APPLYING FIFO STRATEGY")
+    print("=" * 40)
     
-    Args:
-        sales_df (pandas.DataFrame): Sales transactions
-        cost_basis_dict (dict): Cost basis dictionary
+    # Deep copy to avoid modifying original
+    working_cost_basis = copy.deepcopy(cost_basis_dict)
+    fifo_matches = []
+    warnings = []
     
-    Returns:
-        tuple: (cgt_df, remaining_cost_basis_dict, warnings_list)
-    """
-    print(f"\n🔄 Calculating Australian CGT for {len(sales_df)} sales transactions...")
-    
-    # Create a working copy of cost basis dictionary
-    working_cost_basis = {}
-    for symbol, records in cost_basis_dict.items():
-        working_cost_basis[symbol] = [record.copy() for record in records]
-    
-    cgt_records = []
-    warnings_list = []
-    
-    # Process each sale transaction
-    for index, sale in sales_df.iterrows():
-        symbol = sale['Symbol']
-        units_sold = abs(sale.get('Units_Sold', sale.get('Quantity', 0)))
-        sale_price_per_unit = abs(sale.get('Sale_Price_Per_Unit', sale.get('Price (USD)', 0)))
-        sale_date = sale['Trade Date']
-        sale_commission = abs(sale.get('Commission_Paid', sale.get('Commission (USD)', 0)))
-        total_proceeds = abs(sale.get('Total_Proceeds', sale.get('Proceeds (USD)', 0)))
-        net_proceeds = sale.get('Net_Proceeds', total_proceeds - sale_commission)
+    for sale in sales:
+        symbol = sale['symbol']
+        units_to_sell = sale['quantity']
+        sale_date = sale['date']
         
-        print(f"\n📉 Processing sale: {units_sold} units of {symbol} on {sale_date.strftime('%d.%m.%y')}")
+        print(f"\n📉 FIFO: Selling {units_to_sell} {symbol} on {sale_date.strftime('%Y-%m-%d')}")
         
-        # Check if symbol exists in cost basis
         if symbol not in working_cost_basis:
-            warning_msg = f"❌ NO COST BASIS FOUND for {symbol}"
-            warnings_list.append(warning_msg)
-            print(f"   {warning_msg}")
-            
-            cgt_records.append({
-                'Sale_Date': sale_date.strftime('%d.%m.%y'),
-                'Symbol': symbol,
-                'Units_Sold': units_sold,
-                'Sale_Price_Per_Unit': sale_price_per_unit,
-                'Total_Proceeds': total_proceeds,
-                'Sale_Commission': sale_commission,
-                'Net_Proceeds': net_proceeds,
-                'Buy_Date': 'N/A',
-                'Buy_Price_Per_Unit': 0,
-                'Buy_Commission': 0,
-                'Units_Matched': 0,
-                'Days_Held': 0,
-                'Long_Term_Eligible': False,
-                'Cost_Basis': 0,
-                'Capital_Gain_Loss': net_proceeds,
-                'CGT_Discount_Applied': False,
-                'Taxable_Gain': net_proceeds,
-                'Warning': 'NO COST BASIS DATA'
-            })
+            warning = f"❌ No cost basis found for {symbol}"
+            warnings.append(warning)
+            print(f"   {warning}")
             continue
         
-        # Select optimal units for this sale
-        selected_units, missing_units, updated_records = select_optimal_units_for_cgt(
-            working_cost_basis[symbol], units_sold, sale_date
-        )
+        # FIFO: Use oldest purchases first
+        purchases = working_cost_basis[symbol]
+        purchases.sort(key=lambda x: parse_date_flexible(x['date']))
         
-        # Update the working cost basis with remaining units
-        working_cost_basis[symbol] = updated_records
+        remaining_to_sell = units_to_sell
+        sale_matches = []
         
-        if not selected_units:
-            warning_msg = f"❌ NO UNITS AVAILABLE for {symbol}"
-            warnings_list.append(warning_msg)
-            print(f"   {warning_msg}")
+        for i, purchase in enumerate(purchases):
+            if remaining_to_sell <= 0:
+                break
             
-            cgt_records.append({
-                'Sale_Date': sale_date.strftime('%d.%m.%y'),
-                'Symbol': symbol,
-                'Units_Sold': units_sold,
-                'Sale_Price_Per_Unit': sale_price_per_unit,
-                'Total_Proceeds': total_proceeds,
-                'Sale_Commission': sale_commission,
-                'Net_Proceeds': net_proceeds,
-                'Buy_Date': 'N/A',
-                'Buy_Price_Per_Unit': 0,
-                'Buy_Commission': 0,
-                'Units_Matched': 0,
-                'Days_Held': 0,
-                'Long_Term_Eligible': False,
-                'Cost_Basis': 0,
-                'Capital_Gain_Loss': net_proceeds,
-                'CGT_Discount_Applied': False,
-                'Taxable_Gain': net_proceeds,
-                'Warning': 'NO UNITS AVAILABLE'
-            })
-            continue
-        
-        # Create detailed records for each matched purchase
-        for unit_selection in selected_units:
-            # Calculate proportional proceeds for this portion
-            proportion = unit_selection['units'] / units_sold
-            proportional_proceeds = total_proceeds * proportion
-            proportional_sale_commission = sale_commission * proportion
-            proportional_net_proceeds = net_proceeds * proportion
+            if purchase['units'] <= 0:
+                continue
+            
+            units_used = min(remaining_to_sell, purchase['units'])
+            purchase_date = parse_date_flexible(purchase['date'])
+            days_held = (sale_date - purchase_date).days
+            
+            # Calculate proportional commission
+            prop_commission = purchase['commission'] * (units_used / purchase['units'])
+            cost_basis = (units_used * purchase['price']) + prop_commission
             
             # Calculate gain/loss
-            cost_basis = unit_selection['total_cost']
-            capital_gain_loss = proportional_net_proceeds - cost_basis
+            prop_proceeds = sale['net_proceeds'] * (units_used / units_to_sell)
+            capital_gain = prop_proceeds - cost_basis
             
-            # Apply Australian CGT discount if eligible (50% discount for assets held > 12 months)
-            cgt_discount_applied = unit_selection['long_term_eligible'] and capital_gain_loss > 0
-            taxable_gain = capital_gain_loss
-            if cgt_discount_applied:
-                taxable_gain = capital_gain_loss * 0.5  # 50% CGT discount
+            # Apply CGT discount if held > 12 months
+            long_term_eligible = days_held >= 365
+            taxable_gain = capital_gain
+            if long_term_eligible and capital_gain > 0:
+                taxable_gain = capital_gain * 0.5  # 50% CGT discount
             
-            # Warning for missing units
-            warning_msg = ""
-            if missing_units > 0:
-                warning_msg = f"MISSING {missing_units:.2f} UNITS"
+            match = {
+                'sale_symbol': symbol,
+                'sale_date': sale_date,
+                'sale_units': units_used,
+                'sale_price': sale['price'],
+                'purchase_date': purchase_date,
+                'purchase_price': purchase['price'],
+                'days_held': days_held,
+                'long_term_eligible': long_term_eligible,
+                'cost_basis': cost_basis,
+                'proceeds': prop_proceeds,
+                'capital_gain': capital_gain,
+                'taxable_gain': taxable_gain,
+                'strategy': 'FIFO'
+            }
             
-            cgt_records.append({
-                'Sale_Date': sale_date.strftime('%d.%m.%y'),
-                'Symbol': symbol,
-                'Units_Sold': unit_selection['units'],
-                'Sale_Price_Per_Unit': sale_price_per_unit,
-                'Total_Proceeds': proportional_proceeds,
-                'Sale_Commission': proportional_sale_commission,
-                'Net_Proceeds': proportional_net_proceeds,
-                'Buy_Date': unit_selection['buy_date'],
-                'Buy_Price_Per_Unit': unit_selection['price'],
-                'Buy_Commission': unit_selection['commission'],
-                'Units_Matched': unit_selection['units'],
-                'Days_Held': unit_selection['days_held'],
-                'Long_Term_Eligible': unit_selection['long_term_eligible'],
-                'Cost_Basis': cost_basis,
-                'Capital_Gain_Loss': capital_gain_loss,
-                'CGT_Discount_Applied': cgt_discount_applied,
-                'Taxable_Gain': taxable_gain,
-                'Warning': warning_msg
-            })
+            sale_matches.append(match)
             
-            print(f"   ✅ Matched {unit_selection['units']:.2f} units from {unit_selection['buy_date']} "
-                  f"({unit_selection['days_held']} days, {'Long-term' if unit_selection['long_term_eligible'] else 'Short-term'})")
+            # Update remaining units
+            purchase['units'] -= units_used
+            remaining_to_sell -= units_used
+            
+            print(f"   ✅ Used {units_used} units from {purchase_date.strftime('%Y-%m-%d')} "
+                  f"({days_held} days, {'LT' if long_term_eligible else 'ST'})")
         
-        if missing_units > 0:
-            warning_msg = f"⚠️  {symbol}: Missing {missing_units:.2f} units for complete matching"
-            warnings_list.append(warning_msg)
-            print(f"   {warning_msg}")
+        if remaining_to_sell > 0:
+            warning = f"⚠️ {symbol}: Missing {remaining_to_sell} units for complete matching"
+            warnings.append(warning)
+            print(f"   {warning}")
+        
+        fifo_matches.extend(sale_matches)
     
-    # Create remaining cost basis dictionary (only units that weren't sold)
-    remaining_cost_basis = {}
-    for symbol, records in working_cost_basis.items():
-        remaining_records = []
-        for record in records:
-            if record['units'] > 0:  # Only keep records with remaining units
-                remaining_records.append({
-                    'units': record['units'],
-                    'price': record['price'],
-                    'commission': record['commission'],
-                    'date': record['date']
+    return fifo_matches, warnings
+
+def apply_tax_optimal_strategy(sales, cost_basis_dict):
+    """Apply tax-optimal strategy: prioritize 12+ months + highest price."""
+    print(f"\n🎯 APPLYING TAX-OPTIMAL STRATEGY")
+    print("=" * 50)
+    
+    # Deep copy to avoid modifying original
+    working_cost_basis = copy.deepcopy(cost_basis_dict)
+    optimal_matches = []
+    warnings = []
+    
+    for sale in sales:
+        symbol = sale['symbol']
+        units_to_sell = sale['quantity']
+        sale_date = sale['date']
+        
+        print(f"\n📉 TAX-OPTIMAL: Selling {units_to_sell} {symbol} on {sale_date.strftime('%Y-%m-%d')}")
+        
+        if symbol not in working_cost_basis:
+            warning = f"❌ No cost basis found for {symbol}"
+            warnings.append(warning)
+            print(f"   {warning}")
+            continue
+        
+        # Get available purchases
+        available_purchases = []
+        for purchase in working_cost_basis[symbol]:
+            if purchase['units'] > 0:
+                purchase_date = parse_date_flexible(purchase['date'])
+                days_held = (sale_date - purchase_date).days
+                long_term = days_held >= 365
+                
+                available_purchases.append({
+                    'purchase': purchase,
+                    'purchase_date': purchase_date,
+                    'days_held': days_held,
+                    'long_term': long_term,
+                    'price': purchase['price']
                 })
         
-        if remaining_records:
-            remaining_cost_basis[symbol] = remaining_records
-    
-    print(f"\n✅ CGT calculation complete:")
-    print(f"   📊 {len(cgt_records)} matched transactions")
-    print(f"   ⚠️  {len(warnings_list)} warnings")
-    print(f"   📋 {len(remaining_cost_basis)} symbols with remaining units")
-    
-    return pd.DataFrame(cgt_records), remaining_cost_basis, warnings_list
-
-def save_cgt_excel(cgt_df, financial_year, output_file=None):
-    """
-    Save CGT calculations to Excel file formatted for Australian tax reporting.
-    
-    Args:
-        cgt_df (pandas.DataFrame): CGT calculations
-        financial_year (str): Financial year (e.g., "2024-25")
-        output_file (str): Output filename (optional)
-    
-    Returns:
-        str: Output filename
-    """
-    
-    if not EXCEL_AVAILABLE:
-        print("❌ openpyxl not available - cannot create Excel file")
-        return None
-    
-    if output_file is None:
-        output_file = f"Australian_CGT_Report_FY{financial_year}.xlsx"
-    
-    print(f"\n💾 Creating Australian CGT Excel report: {output_file}")
-    
-    try:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+        # Tax-optimal sorting:
+        # 1. Prioritize long-term holdings (12+ months)
+        # 2. Within each group, prioritize highest price (minimize gain)
+        available_purchases.sort(key=lambda x: (
+            -1 if x['long_term'] else 1,  # Long-term first
+            -x['price']  # Highest price first
+        ))
+        
+        remaining_to_sell = units_to_sell
+        sale_matches = []
+        
+        for purchase_info in available_purchases:
+            if remaining_to_sell <= 0:
+                break
             
-            # Main CGT sheet
-            cgt_df.to_excel(writer, sheet_name='CGT_Calculations', index=False)
+            purchase = purchase_info['purchase']
+            purchase_date = purchase_info['purchase_date']
+            days_held = purchase_info['days_held']
+            long_term_eligible = purchase_info['long_term']
             
-            # Summary sheet
-            summary_data = {
-                'Total_Capital_Gains': [cgt_df['Capital_Gain_Loss'].sum()],
-                'Total_Taxable_Gains': [cgt_df['Taxable_Gain'].sum()],
-                'Long_Term_Gains': [cgt_df[cgt_df['Long_Term_Eligible'] == True]['Capital_Gain_Loss'].sum()],
-                'Short_Term_Gains': [cgt_df[cgt_df['Long_Term_Eligible'] == False]['Capital_Gain_Loss'].sum()],
-                'CGT_Discount_Applied': [cgt_df['CGT_Discount_Applied'].sum()],
-                'Financial_Year': [financial_year]
+            units_used = min(remaining_to_sell, purchase['units'])
+            
+            # Calculate proportional commission
+            prop_commission = purchase['commission'] * (units_used / purchase['units'])
+            cost_basis = (units_used * purchase['price']) + prop_commission
+            
+            # Calculate gain/loss
+            prop_proceeds = sale['net_proceeds'] * (units_used / units_to_sell)
+            capital_gain = prop_proceeds - cost_basis
+            
+            # Apply CGT discount if held > 12 months
+            taxable_gain = capital_gain
+            if long_term_eligible and capital_gain > 0:
+                taxable_gain = capital_gain * 0.5  # 50% CGT discount
+            
+            match = {
+                'sale_symbol': symbol,
+                'sale_date': sale_date,
+                'sale_units': units_used,
+                'sale_price': sale['price'],
+                'purchase_date': purchase_date,
+                'purchase_price': purchase['price'],
+                'days_held': days_held,
+                'long_term_eligible': long_term_eligible,
+                'cost_basis': cost_basis,
+                'proceeds': prop_proceeds,
+                'capital_gain': capital_gain,
+                'taxable_gain': taxable_gain,
+                'strategy': 'TAX_OPTIMAL'
             }
-            summary_df = pd.DataFrame(summary_data)
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Warnings sheet (if any)
-            warnings_data = cgt_df[cgt_df['Warning'] != '']
-            if len(warnings_data) > 0:
-                warnings_data.to_excel(writer, sheet_name='Warnings', index=False)
+            sale_matches.append(match)
+            
+            # Update remaining units
+            purchase['units'] -= units_used
+            remaining_to_sell -= units_used
+            
+            print(f"   ✅ Used {units_used} units from {purchase_date.strftime('%Y-%m-%d')} "
+                  f"@ ${purchase['price']:.2f} ({days_held} days, {'LT' if long_term_eligible else 'ST'})")
         
-        print(f"✅ Australian CGT report saved: {output_file}")
+        if remaining_to_sell > 0:
+            warning = f"⚠️ {symbol}: Missing {remaining_to_sell} units for complete matching"
+            warnings.append(warning)
+            print(f"   {warning}")
         
-        # Display summary
-        total_gain = cgt_df['Capital_Gain_Loss'].sum()
-        taxable_gain = cgt_df['Taxable_Gain'].sum()
-        long_term_count = len(cgt_df[cgt_df['Long_Term_Eligible'] == True])
-        
-        print(f"\n📊 CGT Summary for FY {financial_year}:")
-        print(f"   💰 Total Capital Gain/Loss: ${total_gain:,.2f} USD")
-        print(f"   📋 Total Taxable Gain: ${taxable_gain:,.2f} USD")
-        print(f"   🟢 Long-term transactions: {long_term_count}")
-        print(f"   🟡 Short-term transactions: {len(cgt_df) - long_term_count}")
-        
-        return output_file
-        
-    except Exception as e:
-        print(f"❌ Error creating Excel file: {e}")
-        return None
+        optimal_matches.extend(sale_matches)
+    
+    return optimal_matches, warnings
 
-def save_remaining_cost_basis(remaining_cost_basis, financial_year, output_file=None):
-    """
-    Save remaining cost basis dictionary to JSON file.
+def compare_strategies(fifo_matches, optimal_matches):
+    """Compare FIFO vs Tax-Optimal strategies for ATO reporting."""
+    print(f"\n📊 STRATEGY COMPARISON - ATO REPORTABLE AMOUNTS")
+    print("=" * 60)
     
-    Args:
-        remaining_cost_basis (dict): Remaining cost basis after sales
-        financial_year (str): Financial year
-        output_file (str): Output filename (optional)
+    # Calculate totals for ATO reporting
+    fifo_total_gain = sum(m['capital_gain'] for m in fifo_matches)
+    fifo_taxable_gain = sum(m['taxable_gain'] for m in fifo_matches)
     
-    Returns:
-        str: Output filename
-    """
+    optimal_total_gain = sum(m['capital_gain'] for m in optimal_matches)
+    optimal_taxable_gain = sum(m['taxable_gain'] for m in optimal_matches)
     
-    if output_file is None:
-        output_file = f"cost_basis_dictionary_post_FY{financial_year}.json"
+    # Calculate difference in reportable amounts
+    total_gain_difference = fifo_total_gain - optimal_total_gain
+    taxable_gain_difference = fifo_taxable_gain - optimal_taxable_gain
+    
+    # Separate gains and losses for ATO reporting
+    fifo_gains = sum(m['capital_gain'] for m in fifo_matches if m['capital_gain'] > 0)
+    fifo_losses = sum(m['capital_gain'] for m in fifo_matches if m['capital_gain'] < 0)
+    
+    optimal_gains = sum(m['capital_gain'] for m in optimal_matches if m['capital_gain'] > 0)
+    optimal_losses = sum(m['capital_gain'] for m in optimal_matches if m['capital_gain'] < 0)
+    
+    print(f"🔄 FIFO Strategy - ATO Reporting:")
+    print(f"   Total Capital Gains: ${fifo_gains:,.2f}")
+    print(f"   Total Capital Losses: ${fifo_losses:,.2f}")
+    print(f"   Net Capital Gain/Loss: ${fifo_total_gain:,.2f}")
+    print(f"   Taxable Amount (after CGT discount): ${fifo_taxable_gain:,.2f}")
+    
+    print(f"\n🎯 Tax-Optimal Strategy - ATO Reporting:")
+    print(f"   Total Capital Gains: ${optimal_gains:,.2f}")
+    print(f"   Total Capital Losses: ${optimal_losses:,.2f}")
+    print(f"   Net Capital Gain/Loss: ${optimal_total_gain:,.2f}")
+    print(f"   Taxable Amount (after CGT discount): ${optimal_taxable_gain:,.2f}")
+    
+    print(f"\n💰 OPTIMIZATION BENEFIT:")
+    print(f"   Reduction in Net Capital Gain: ${total_gain_difference:,.2f}")
+    print(f"   Reduction in Taxable Amount: ${taxable_gain_difference:,.2f}")
+    print(f"   💡 Lower taxable amount = less income to report to ATO")
+    
+    # Long-term vs short-term breakdown for CGT discount analysis
+    fifo_lt = sum(1 for m in fifo_matches if m['long_term_eligible'])
+    optimal_lt = sum(1 for m in optimal_matches if m['long_term_eligible'])
+    
+    fifo_lt_gains = sum(m['capital_gain'] for m in fifo_matches if m['long_term_eligible'] and m['capital_gain'] > 0)
+    optimal_lt_gains = sum(m['capital_gain'] for m in optimal_matches if m['long_term_eligible'] and m['capital_gain'] > 0)
+    
+    print(f"\n📈 CGT DISCOUNT UTILIZATION:")
+    print(f"   FIFO: {fifo_lt}/{len(fifo_matches)} transactions used 12+ month holdings")
+    print(f"   Tax-Optimal: {optimal_lt}/{len(optimal_matches)} transactions used 12+ month holdings")
+    print(f"   FIFO: ${fifo_lt_gains:,.2f} in gains eligible for 50% CGT discount")
+    print(f"   Tax-Optimal: ${optimal_lt_gains:,.2f} in gains eligible for 50% CGT discount")
+    
+    return {
+        'fifo_total_gain': fifo_total_gain,
+        'fifo_taxable_gain': fifo_taxable_gain,
+        'fifo_gains': fifo_gains,
+        'fifo_losses': fifo_losses,
+        'optimal_total_gain': optimal_total_gain,
+        'optimal_taxable_gain': optimal_taxable_gain,
+        'optimal_gains': optimal_gains,
+        'optimal_losses': optimal_losses,
+        'taxable_reduction': taxable_gain_difference,
+        'total_gain_reduction': total_gain_difference
+    }
+
+def generate_detailed_report(fifo_matches, optimal_matches, comparison, financial_year):
+    """Generate detailed Excel report."""
+    print(f"\n📄 GENERATING DETAILED REPORT")
+    print("=" * 40)
     
     try:
-        with open(output_file, 'w') as f:
-            json.dump(remaining_cost_basis, f, indent=2)
+        # Create DataFrames
+        fifo_df = pd.DataFrame(fifo_matches)
+        optimal_df = pd.DataFrame(optimal_matches)
         
-        print(f"✅ Remaining cost basis saved: {output_file}")
+        # Format dates
+        if len(fifo_df) > 0:
+            fifo_df['sale_date'] = fifo_df['sale_date'].dt.strftime('%Y-%m-%d')
+            fifo_df['purchase_date'] = fifo_df['purchase_date'].dt.strftime('%Y-%m-%d')
         
-        total_symbols = len(remaining_cost_basis)
-        total_units = sum(sum(record['units'] for record in records) for records in remaining_cost_basis.values())
-        total_value = sum(sum(record['units'] * record['price'] for record in records) for records in remaining_cost_basis.values())
+        if len(optimal_df) > 0:
+            optimal_df['sale_date'] = optimal_df['sale_date'].dt.strftime('%Y-%m-%d')
+            optimal_df['purchase_date'] = optimal_df['purchase_date'].dt.strftime('%Y-%m-%d')
         
-        print(f"📊 Remaining holdings:")
-        print(f"   🏷️  Symbols: {total_symbols}")
-        print(f"   📦 Units: {total_units:,.2f}")
-        print(f"   💰 Value: ${total_value:,.2f} USD (cost basis)")
+        # Create summary for ATO reporting
+        summary_data = {
+            'Metric': [
+                'FIFO - Total Capital Gains',
+                'FIFO - Total Capital Losses', 
+                'FIFO - Net Capital Gain/Loss',
+                'FIFO - Taxable Amount (after CGT discount)',
+                'Tax Optimal - Total Capital Gains',
+                'Tax Optimal - Total Capital Losses',
+                'Tax Optimal - Net Capital Gain/Loss', 
+                'Tax Optimal - Taxable Amount (after CGT discount)',
+                'Reduction in Taxable Amount',
+                'Financial Year'
+            ],
+            'Value': [
+                comparison['fifo_gains'],
+                comparison['fifo_losses'],
+                comparison['fifo_total_gain'],
+                comparison['fifo_taxable_gain'],
+                comparison['optimal_gains'],
+                comparison['optimal_losses'],
+                comparison['optimal_total_gain'],
+                comparison['optimal_taxable_gain'],
+                comparison['taxable_reduction'],
+                financial_year
+            ]
+        }
+        summary_df = pd.DataFrame(summary_data)
         
-        return output_file
+        # Save to Excel
+        filename = f"CGT_Strategy_Comparison_FY{financial_year}.xlsx"
+        
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            if len(fifo_df) > 0:
+                fifo_df.to_excel(writer, sheet_name='FIFO_Strategy', index=False)
+            if len(optimal_df) > 0:
+                optimal_df.to_excel(writer, sheet_name='Tax_Optimal_Strategy', index=False)
+        
+        print(f"✅ Report saved: {filename}")
+        return filename
         
     except Exception as e:
-        print(f"❌ Error saving remaining cost basis: {e}")
+        print(f"❌ Error generating report: {e}")
         return None
 
 def main():
-    """
-    Main function to run Australian CGT calculations.
-    """
-    
-    print("🇦🇺 AUSTRALIAN CGT CALCULATOR & OPTIMIZER")
-    print("="*60)
-    print("This script calculates Australian CGT with optimal tax matching:")
-    print("• Prioritizes long-term holdings (>12 months) for 50% CGT discount")
-    print("• Matches highest cost basis first to minimize gains")
-    print("• Provides detailed Excel report for tax lodgment")
-    print("• Creates updated cost basis dictionary for remaining holdings")
+    """Main function to run CGT optimization analysis with AUD conversion."""
+    print("🎯 CGT OPTIMIZER with AUD CONVERSION")
+    print("=" * 70)
+    print("Compare FIFO vs Tax-Optimal strategies")
+    print("Prioritizes: 12+ month holdings + highest cost basis")
+    print("🇦🇺 NEW: AUD conversion using RBA exchange rates")
     print()
     
-    # Get input files
-    print("📄 Input files needed:")
-    print("1. Sales CSV file (current financial year)")
-    print("2. Cost basis dictionary JSON file")
-    print()
+    # Configuration
+    html_folder = "html_folder"
+    cost_basis_file = "COMPLETE_unified_cost_basis_with_FIFO_hybrid_sell_cutoff_2024_06_30.json"
+    financial_year = "2024-25"
     
-    # Look for likely files
-    sales_files = []
-    # Look for sales files (both CSV and Excel)
-    for ext in ['.csv', '.xlsx', '.xls']:
-        sales_files.extend([f for f in os.listdir('.') if 'sales' in f.lower() and f.endswith(ext)])
-        sales_files.extend([f for f in os.listdir('.') if 'cgt' in f.lower() and f.endswith(ext)])
+    # RBA exchange rate files
+    rba_files = [
+        "FX_2018-2022.csv",
+        "FX_2023-2025.csv"
+    ]
     
-    # Remove duplicates and sort
-    sales_files = sorted(list(set(sales_files)))
+    # Step 1: Load RBA exchange rates
+    print("💱 STEP 1: LOADING RBA EXCHANGE RATES")
+    print("=" * 50)
+    aud_converter = RBAAUDConverter()
+    aud_converter.load_rba_csv_files(rba_files)
     
-    cost_basis_files = [f for f in os.listdir('.') if 'cost_basis' in f.lower() and f.endswith('.json')]
+    if not aud_converter.exchange_rates:
+        print("❌ Failed to load exchange rate data")
+        print("⚠️ Continuing with USD-only calculations...")
+        aud_converter = None
     
-    print("🔍 Found potential files:")
-    if sales_files:
-        print("   Sales files (CSV/Excel):")
-        for i, file in enumerate(sales_files, 1):
-            print(f"   {i}. {file}")
-    
-    if cost_basis_files:
-        print("   Cost basis JSON files:")
-        for i, file in enumerate(cost_basis_files, 1):
-            print(f"   {i}. {file}")
-    
-    # Get file selections
-    try:
-        print("\nSelect files to use:")
-        
-        if sales_files:
-            sales_choice = input(f"Sales file (1-{len(sales_files)} or filename): ").strip()
-            try:
-                sales_file = sales_files[int(sales_choice) - 1]
-            except:
-                sales_file = sales_choice
-        else:
-            sales_file = input("Sales file (CSV/Excel) filename: ").strip()
-        
-        if cost_basis_files:
-            cost_choice = input(f"Cost basis JSON file (1-{len(cost_basis_files)} or filename): ").strip()
-            try:
-                cost_basis_file = cost_basis_files[int(cost_choice) - 1]
-            except:
-                cost_basis_file = cost_choice
-        else:
-            cost_basis_file = input("Cost basis JSON filename: ").strip()
-        
-        financial_year = input("Financial year (e.g., 2024-25): ").strip() or "2024-25"
-        
-    except KeyboardInterrupt:
-        print("\n⚠️ Process interrupted")
-        return
-    
-    # Load input files
-    print(f"\n🔄 Loading input files...")
-    sales_df = load_sales_csv(sales_file)
+    # Step 2: Load cost basis
     cost_basis_dict = load_cost_basis_json(cost_basis_file)
-    
-    if sales_df is None or cost_basis_dict is None:
-        print("❌ Failed to load input files")
+    if not cost_basis_dict:
+        print("❌ Failed to load cost basis")
         return
     
-    # Calculate CGT
-    cgt_df, remaining_cost_basis, warnings_list = calculate_australian_cgt(sales_df, cost_basis_dict)
-    
-    if cgt_df is None or len(cgt_df) == 0:
-        print("❌ No CGT calculations generated")
+    # Step 3: Extract FY sales
+    sales = extract_fy_sales(html_folder, financial_year)
+    if not sales:
+        print("❌ No sales found for analysis")
         return
     
-    # Save results
-    print(f"\n💾 Saving results...")
-    excel_file = save_cgt_excel(cgt_df, financial_year)
-    json_file = save_remaining_cost_basis(remaining_cost_basis, financial_year)
+    # Step 4: Apply FIFO strategy
+    fifo_matches, fifo_warnings = apply_fifo_strategy(sales, cost_basis_dict)
     
-    # Display warnings
-    if warnings_list:
-        print(f"\n⚠️  WARNINGS ({len(warnings_list)}):")
-        for warning in warnings_list[:10]:  # Show first 10
+    # Step 5: Apply tax-optimal strategy
+    optimal_matches, optimal_warnings = apply_tax_optimal_strategy(sales, cost_basis_dict)
+    
+    # Step 6: Convert to AUD if exchange rates available
+    if aud_converter:
+        print(f"\n💱 STEP 6: CONVERTING TO AUD")
+        print("=" * 40)
+        
+        # Convert FIFO results to AUD
+        fifo_df = pd.DataFrame(fifo_matches)
+        if len(fifo_df) > 0:
+            fifo_df_aud = aud_converter.enhance_cgt_dataframe_with_aud(fifo_df)
+        else:
+            fifo_df_aud = fifo_df
+        
+        # Convert optimal results to AUD
+        optimal_df = pd.DataFrame(optimal_matches)
+        if len(optimal_df) > 0:
+            optimal_df_aud = aud_converter.enhance_cgt_dataframe_with_aud(optimal_df)
+        else:
+            optimal_df_aud = optimal_df
+        
+        # Create AUD comparison
+        if len(fifo_df_aud) > 0 and len(optimal_df_aud) > 0:
+            aud_comparison = aud_converter.create_aud_summary(fifo_df_aud, optimal_df_aud)
+        else:
+            aud_comparison = None
+    else:
+        fifo_df_aud = pd.DataFrame(fifo_matches)
+        optimal_df_aud = pd.DataFrame(optimal_matches)
+        aud_comparison = None
+    
+    # Step 7: Compare strategies (USD)
+    usd_comparison = compare_strategies(fifo_matches, optimal_matches)
+    
+    # Step 8: Generate report with AUD data
+    report_file = generate_detailed_report_with_aud(
+        fifo_matches, optimal_matches, 
+        fifo_df_aud, optimal_df_aud,
+        usd_comparison, aud_comparison, 
+        financial_year
+    )
+    
+    # Step 9: Final summary
+    print(f"\n🎉 ANALYSIS COMPLETE!")
+    print("=" * 30)
+    print(f"📊 Analyzed {len(sales)} sales transactions")
+    
+    if aud_comparison:
+        print(f"🇦🇺 AUD RESULTS (for ATO):")
+        print(f"   💰 Tax-optimal taxable gain: ${aud_comparison['optimal_taxable_gain_aud']:,.2f} AUD")
+        print(f"   💰 AUD savings vs FIFO: ${aud_comparison['aud_savings']:,.2f} AUD")
+    else:
+        print(f"💰 USD reduction in taxable amount: ${usd_comparison['taxable_reduction']:,.2f}")
+    
+    if report_file:
+        print(f"📄 Detailed report: {report_file}")
+    
+    if fifo_warnings or optimal_warnings:
+        print(f"\n⚠️ WARNINGS:")
+        for warning in set(fifo_warnings + optimal_warnings):
             print(f"   • {warning}")
-        if len(warnings_list) > 10:
-            print(f"   • ... and {len(warnings_list) - 10} more warnings")
     
-    # Final summary
-    print(f"\n🎉 Australian CGT calculation complete!")
-    print(f"📄 Files created:")
-    if excel_file:
-        print(f"   📊 {excel_file} - Australian CGT report for tax lodgment")
-    if json_file:
-        print(f"   📋 {json_file} - Remaining cost basis for future calculations")
-    
-    print(f"\n📋 Next steps:")
-    print(f"1. Review the Excel file for your tax lodgment")
-    print(f"2. Use the remaining cost basis JSON for future CGT calculations")
-    print(f"3. Address any warnings listed above")
+    print(f"\n💡 Next steps:")
+    if aud_comparison:
+        print(f"   1. Use AUD amounts for ATO tax return")
+        print(f"   2. Report taxable gain: ${aud_comparison['optimal_taxable_gain_aud']:,.2f} AUD")
+        print(f"   3. Review detailed Excel report with dual currency")
+    else:
+        print(f"   1. Review the detailed Excel report")
+        print(f"   2. Consider adding RBA exchange rate data for AUD conversion")
+        print(f"   3. Use tax-optimal strategy for reporting")f"   2. Use 'Tax Optimal' strategy amounts for ATO lodgment")
+    print(f"   3. Report taxable amount: ${comparison['optimal_taxable_gain']:,.2f}")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n⚠️ Process interrupted by user")
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        print("Please check your input files and try again")
+    main()
