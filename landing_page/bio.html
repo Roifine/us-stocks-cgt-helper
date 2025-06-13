@@ -1,0 +1,142 @@
+<!-- Add this section between the Solution Section and Beta Signup -->
+<section class="founder-section">
+    <div class="container">
+        <h2 class="section-title">Why I Built This</h2>
+        
+        <div class="founder-content">
+            <div class="founder-card">
+                <div class="founder-avatar">
+                    <img src="roi.jpg" alt="Roi Fine - Founder" class="founder-photo">
+                </div>
+                
+                <div class="founder-story">
+                    <h3>Hi, I'm Roi Fine</h3>
+                    <p class="founder-subtitle">Product Manager at Atlassian • Economics & Business Graduate • 8+ Years Australian Investor</p>
+                    
+                    <div class="story-content">
+                        <p><strong>The Problem Hit Me Personally:</strong></p>
+                        <p>When I moved to Australia 8 years ago, I was shocked by how complex US stock CGT calculations were. Coming from a tech and economics background, I thought "surely there's a better way?"</p>
+                        
+                        <p><strong>The Impossible Choice:</strong></p>
+                        <p>I considered switching to Australian stocks, but let's be honest - the returns and opportunities just aren't the same. So like many of you, I stuck with US markets via CommSec International.</p>
+                        
+                        <p><strong>The Expensive Reality:</strong></p>
+                        <p>Every tax season, I'd pay hundreds of dollars to tax agents, only to be told: <em>"You need to organize all this trading data yourself first."</em> Seriously? I'm paying you to tell me to do the hard work myself?</p>
+                        
+                        <p><strong>This Year, I Said Enough:</strong></p>
+                        <p>After spending my 8th year manually organizing CommSec tax files in spreadsheets, I decided to use my product management experience to build a solution. Not just for me, but for every Australian investor facing this same frustrating problem.</p>
+                        
+                        <blockquote>
+                            "If we're going to invest in US markets for better returns, we shouldn't have to suffer through weeks of manual tax prep every year."
+                        </blockquote>
+                        
+                        <p>This tool represents hundreds of hours of development to save our community thousands of hours of manual work. Let's spend our time analyzing investments, not organizing spreadsheets.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+.founder-section {
+    padding: 80px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.founder-content {
+    max-width: 800px;
+    margin: 40px auto 0;
+}
+
+.founder-card {
+    background: white;
+    border-radius: 20px;
+    padding: 50px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.founder-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.founder-avatar {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.founder-photo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin: 0 auto;
+    display: block;
+    object-fit: cover;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    border: 3px solid white;
+}
+
+.founder-story h3 {
+    text-align: center;
+    font-size: 2rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.founder-subtitle {
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #ecf0f1;
+    padding-bottom: 20px;
+}
+
+.story-content p {
+    margin-bottom: 20px;
+    line-height: 1.7;
+    color: #2c3e50;
+}
+
+.story-content p strong {
+    color: #34495e;
+}
+
+.story-content em {
+    color: #e74c3c;
+    font-style: italic;
+}
+
+blockquote {
+    background: #f8f9fa;
+    border-left: 4px solid #667eea;
+    padding: 20px;
+    margin: 30px 0;
+    font-style: italic;
+    font-size: 1.1rem;
+    color: #34495e;
+    border-radius: 0 10px 10px 0;
+}
+
+@media (max-width: 768px) {
+    .founder-card {
+        padding: 30px 20px;
+    }
+    
+    .founder-story h3 {
+        font-size: 1.6rem;
+    }
+    
+    .founder-subtitle {
+        font-size: 1rem;
+    }
+}
+</style>

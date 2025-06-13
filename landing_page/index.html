@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GPFCSTT5L0"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-GPFCSTT5L0');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>US Stocks CGT Calculator - Australian Investors</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            background: #fafafa; 
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        /* Header */
+        .header { background: white; padding: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: #2d3748; }
+        .nav-links { display: flex; gap: 30px; }
+        .nav-links a { 
+            color: #2d3748; 
+            text-decoration: none; 
+            font-weight: 500; 
+            transition: color 0.2s; 
+        }
+        .nav-links a:hover { color: #38a169; }
+        
+        /* Hero Section */
+        .hero { background: white; padding: 60px 0; text-align: center; }
+        .hero-icon { 
+            width: 80px; 
+            height: 80px; 
+            background: #e6fffa; 
+            border-radius: 20px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin: 0 auto 30px; 
+            font-size: 2rem; 
+        }
+        .hero h1 { 
+            font-size: 3.5rem; 
+            font-weight: 800; 
+            margin-bottom: 20px; 
+            color: #2d3748; 
+        }
+        .hero h1 .highlight { color: #38a169; }
+        .hero p { 
+            font-size: 1.3rem; 
+            color: #718096; 
+            margin-bottom: 30px; 
+            max-width: 800px; 
+            margin-left: auto; 
+            margin-right: auto; 
+        }
+        .cta-buttons { 
+            display: flex; 
+            gap: 20px; 
+            justify-content: center; 
+            margin-bottom: 50px; 
+            flex-wrap: wrap; 
+        }
+        .btn-primary { 
+            background: #38a169; 
+            color: white; 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            text-decoration: none; 
+            display: inline-block; 
+            transition: all 0.2s; 
+        }
+        .btn-primary:hover { background: #2f855a; transform: translateY(-1px); }
+        .btn-secondary { 
+            background: transparent; 
+            color: #38a169; 
+            padding: 15px 30px; 
+            border: 2px solid #38a169; 
+            border-radius: 8px; 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            text-decoration: none; 
+            display: inline-block; 
+            transition: all 0.2s; 
+        }
+        .btn-secondary:hover { background: #38a169; color: white; }
+        
+        /* Features */
+        .features { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; margin-bottom: 60px; }
+        .feature { text-align: center; max-width: 250px; }
+        .feature-icon { 
+            width: 60px; 
+            height: 60px; 
+            background: #e6fffa; 
+            border-radius: 12px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin: 0 auto 20px; 
+            font-size: 1.5rem; 
+        }
+        .feature h3 { 
+            font-size: 1.3rem; 
+            font-weight: 700; 
+            margin-bottom: 10px; 
+            color: #2d3748; 
+        }
+        .feature p { color: #718096; font-size: 1rem; }
+        
+        /* Founder Section */
+        .founder-section {
+            padding: 80px 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .founder-content {
+            max-width: 800px;
+            margin: 40px auto 0;
+        }
+
+        .founder-card {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .founder-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #38a169, #2f855a);
+        }
+
+        .founder-avatar {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .founder-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto;
+            display: block;
+            object-fit: cover;
+            box-shadow: 0 15px 40px rgba(56, 161, 105, 0.3);
+            border: 4px solid white;
+        }
+
+        .founder-story h3 {
+            text-align: center;
+            font-size: 2rem;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .founder-subtitle {
+            text-align: center;
+            color: #718096;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 20px;
+        }
+
+        .story-content p {
+            margin-bottom: 20px;
+            line-height: 1.7;
+            color: #2d3748;
+            font-size: 1.05rem;
+        }
+
+        .story-content p strong {
+            color: #2d3748;
+            font-weight: 700;
+        }
+
+        .story-content em {
+            color: #e53e3e;
+            font-style: italic;
+        }
+
+        blockquote {
+            background: #f7fafc;
+            border-left: 4px solid #38a169;
+            padding: 20px;
+            margin: 30px 0;
+            font-style: italic;
+            font-size: 1.15rem;
+            color: #2d3748;
+            border-radius: 0 10px 10px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        /* Blog Section */
+        .blog-section {
+            padding: 60px 0;
+            background: white;
+        }
+
+        .blog-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .blog-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .blog-article {
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .blog-article h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 15px;
+            line-height: 1.3;
+        }
+
+        .blog-article p {
+            font-size: 1.1rem;
+            color: #718096;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .blog-read-more {
+            color: #38a169;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .blog-read-more:hover {
+            border-bottom-color: #38a169;
+        }
+        
+        /* Calculator Section */
+        .calculator-section { background: white; padding: 80px 0; }
+        .calculator-content { text-align: center; max-width: 800px; margin: 0 auto; }
+        .calculator-content h2 { 
+            font-size: 2.5rem; 
+            font-weight: 700; 
+            margin-bottom: 20px; 
+            color: #2d3748; 
+        }
+        .calculator-content p { 
+            font-size: 1.2rem; 
+            color: #718096; 
+            margin-bottom: 40px; 
+        }
+        
+        /* Privacy Note */
+        .privacy-note {
+            background: #f0fff4;
+            border: 1px solid #38a169;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .privacy-note strong {
+            color: #38a169;
+            font-size: 1.1rem;
+        }
+        
+        .privacy-note span {
+            color: #2d3748;
+            font-size: 0.95rem;
+            display: block;
+            margin-top: 5px;
+        }
+        
+        /* Form */
+        .signup-form { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); 
+            max-width: 500px; 
+            margin: 0 auto; 
+            border: 1px solid #e2e8f0; 
+        }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #2d3748; 
+        }
+        .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; 
+            padding: 12px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 6px; 
+            font-size: 1rem; 
+            transition: border-color 0.2s; 
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+            outline: none; 
+            border-color: #38a169; 
+        }
+        .checkbox-group { margin-bottom: 25px; }
+        .checkbox-item { 
+            display: flex; 
+            align-items: flex-start; 
+            margin-bottom: 12px; 
+            font-size: 0.95rem; 
+            text-align: left;
+        }
+        .checkbox-item input { 
+            width: auto; 
+            margin-right: 10px; 
+            margin-top: 2px; 
+        }
+        .submit-btn { 
+            width: 100%; 
+            background: #38a169; 
+            color: white; 
+            padding: 15px; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: background 0.2s; 
+        }
+        .submit-btn:hover { background: #2f855a; }
+        
+        /* Footer */
+        .footer { background: #f7fafc; padding: 40px 0; text-align: center; }
+        .footer p { color: #718096; font-size: 0.9rem; margin-bottom: 10px; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero { padding: 40px 0; }
+            .hero-icon { margin-bottom: 20px; }
+            .hero h1 { font-size: 2.2rem; margin-bottom: 15px; }
+            .hero p { font-size: 1.1rem; margin-bottom: 25px; }
+            .cta-buttons { margin-bottom: 35px; }
+            .features { flex-direction: column; align-items: center; gap: 30px; margin-bottom: 40px; }
+            .cta-buttons { flex-direction: column; align-items: center; }
+            .signup-form { margin: 0 20px; padding: 30px 25px; }
+            .founder-card { padding: 30px 20px; }
+            .founder-story h3 { font-size: 1.6rem; }
+            .founder-subtitle { font-size: 1rem; }
+            .founder-photo { width: 100px; height: 100px; }
+            .section-title { font-size: 2rem; }
+            .story-content p { font-size: 1rem; }
+            blockquote { font-size: 1rem; }
+            .nav-links { display: none; } /* Hide nav links on mobile for now */
+            .blog-article h1 { font-size: 1.5rem; }
+        }
+        
+        @media (min-width: 1200px) {
+            .features { 
+                gap: 40px; 
+            }
+            .feature { 
+                max-width: 250px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="nav">
+                <div class="logo">🇦🇺 CGT Calculator</div>
+                <div class="nav-links">
+                    <a href="index.html">Home</a>
+                    <a href="cgt-optimization-strategies.html">Blog</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hero">
+        <div class="container">
+            <div class="hero-icon">📊</div>
+            <h1>US Stocks <span class="highlight">Capital Gains Calculator</span> for Australian Investors</h1>
+            <p>Stop wasting precious time and money. Calculate your capital gains taxes and optimize your investment strategy with our comprehensive US stock tax calculator for Australian investors.</p>
+            
+            <div class="cta-buttons">
+                <a href="#signup" class="btn-primary">Get Early Access</a>
+                <a href="#founder" class="btn-secondary">Learn More</a>
+            </div>
+            
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Tax Optimization</h3>
+                    <p>Minimize your Australian CGT liability with a smart AI algorithm favouring older parcels with higher prices</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">💲</div>
+                    <h3>Currency Conversion</h3>
+                    <p>Automatic USD to AUD conversion using historical RBA exchange rates</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Effortless CGT Calculations</h3>
+                    <p>Heavy lifting done for you. Just upload your broker statements (csv/html) and get CGT summary in seconds for your review</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure Processing</h3>
+                    <p>Files are processed securely and temporarily. We automatically delete your data after processing - never stored permanently</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="founder-section" id="founder">
+        <div class="container">
+            <h2 class="section-title">Why I Built This</h2>
+            
+            <div class="founder-content">
+                <div class="founder-card">
+                    <div class="founder-avatar">
+                        <img src="roi.jpg" alt="Roi Fine - Founder" class="founder-photo">
+                    </div>
+                    
+                    <div class="founder-story">
+                        <h3>Hi, I'm Roi Fine <a href="https://www.linkedin.com/in/roi-f-b99a1b11/" target="_blank" style="font-size: 0.8em; color: #38a169; text-decoration: none;">🔗 LinkedIn</a></h3>
+                        <p class="founder-subtitle">Former Product Manager at Atlassian • Economics Graduate • Professional Trader • 20+ Years US Markets Experience</p>
+                        
+                        <div class="story-content">
+                            <p><strong>The Problem Hit Me Personally:</strong></p>
+                            <p>When I moved to Australia 8 years ago, I was shocked by how complex US stock CGT calculations were. Coming from a 20+ year background as a professional trader and long-term US markets investor, plus my product management and economics experience, I thought "surely there's a better way?"</p>
+                            
+                            <p><strong>The Impossible Choice:</strong></p>
+                            <p>I considered switching to Australian stocks, but let's be honest - the returns and opportunities just aren't the same. So like many of you, I stuck with US markets via CommSec International.</p>
+                            
+                            <p><strong>The Expensive Reality:</strong></p>
+                            <p>Every tax season, I'd pay hundreds of dollars to tax agents, only to be told: <em>"You need to organize all this trading data yourself first."</em> Seriously? I'm paying you to tell me to do the hard work myself?</p>
+                            
+                            <p><strong>This Year, I Said Enough:</strong></p>
+                            <p>After spending my 8th year manually organizing CommSec tax files in spreadsheets, I decided to use my product management, economics, and professional trading experience to build a solution. With a name like ROI, I've always been passionate about maximizing returns - and I realized complex tax prep was destroying everyone's ROI! Not just for me, but for every Australian investor facing this same frustrating problem.</p>
+                            
+                            <blockquote>
+                                "If we're going to invest in US markets for better returns, we shouldn't have to suffer through weeks of manual tax prep every year."
+                            </blockquote>
+                            
+                            <p>This tool represents hundreds of hours of development to save our community thousands of hours of manual work. Let's spend our time analyzing investments, not organizing spreadsheets.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="blog-section">
+        <div class="container">
+            <div class="blog-header">
+                <h2>Latest Insights</h2>
+            </div>
+            
+            <div class="blog-article">
+                <h1>3 CGT Optimization Strategies That Could Save You Thousands on US Stocks</h1>
+                <p>If you're an Australian investor trading US stocks, you're probably paying way more tax than you need to. I learned this the hard way during my first US stock tax season after manually calculating CGT on 47 transactions.</p>
+                <a href="cgt-optimization-strategies.html" class="blog-read-more">Read more →</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="calculator-section" id="signup">
+        <div class="container">
+            <div class="calculator-content">
+                <h2>Calculate Your US Stock Taxes</h2>
+                <p>Enter your information to get early access to our Australian US stocks CGT calculator and eliminate manual currency conversion work.</p>
+                
+                <div class="privacy-note">
+                    <strong>🔒 Your Data is Secure</strong>
+                    <span>Files are processed temporarily and automatically deleted after calculations. We never store your trading data permanently.</span>
+                </div>
+                
+                <div class="signup-form">
+                    <form method="POST" netlify name="us-stocks-signup" action="/success">
+                        <input type="hidden" name="form-name" value="us-stocks-signup" />
+                        
+                        <div class="form-group">
+                            <label>Email Address *</label>
+                            <input type="email" name="email" required placeholder="your.email@example.com">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Full Name *</label>
+                            <input type="text" name="name" required placeholder="Your full name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>How do you trade US stocks? *</label>
+                            <select name="us_trading_platform" required>
+                                <option value="">Select your platform...</option>
+                                <option value="CommSec International">CommSec International</option>
+                                <option value="Interactive Brokers">Interactive Brokers</option>
+                                <option value="Stake">Stake</option>
+                                <option value="SelfWealth US">SelfWealth US</option>
+                                <option value="eToro">eToro</option>
+                                <option value="Other platform">Other platform</option>
+                            </select>
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="agreement[]" value="contact_feedback" required id="agree1">
+                                <label for="agree1">I'm willing to be contacted and provide feedback about the tool</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="agreement[]" value="verification" required id="agree2">
+                                <label for="agree2">I will verify all calculations with a qualified tax professional</label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>What's your biggest US stocks CGT challenge?</label>
+                            <textarea name="cgt_challenge" rows="3" placeholder="e.g., Currency conversion, cost basis tracking, FIFO calculations, etc."></textarea>
+                        </div>
+                        
+                        <button type="submit" class="submit-btn" onclick="gtag('event', 'signup', {'event_category': 'form'});">Get Early Access</button>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="container">
+            <p><strong>Disclaimer:</strong> This tool provides calculations for informational purposes only and does not constitute tax advice.</p>
+            <p>US stocks CGT calculations for Australian residents involve complex rules - always consult with a qualified tax professional.</p>
+            <p><strong>Privacy:</strong> Your financial data is processed temporarily for calculations and automatically deleted. No trading information is stored permanently on our servers.</p>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>
