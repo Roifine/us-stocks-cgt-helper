@@ -103,6 +103,8 @@ def create_mock_rba_rates(temp_dir):
     
     return rates_folder
 
+# REPLACE the load_existing_csv_files function in app.py with this FIXED version:
+
 def load_existing_csv_files(financial_year):
     """Load existing CSV files from csv_folder/ and current directory"""
     
@@ -127,6 +129,10 @@ def load_existing_csv_files(financial_year):
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
     
+    # FIXED: Calculate target FY range for sales
+    target_fy_start = datetime(fy_year, 7, 1)
+    target_fy_end = datetime(fy_year + 1, 6, 30)
+    
     all_transactions = []
     
     for csv_file in transaction_files:
@@ -137,7 +143,7 @@ def load_existing_csv_files(financial_year):
             
             # Format 1: Manual CSV format (Date, Activity_Type, Symbol, Quantity, Price_USD)
             if all(col in df.columns for col in ['Date', 'Activity_Type', 'Symbol', 'Quantity', 'Price_USD']):
-                # Apply hybrid filtering
+                # Apply FIXED hybrid filtering
                 df_copy = df.copy()
                 df_copy['Date'] = pd.to_datetime(df_copy['Date'], format='%d.%m.%y', errors='coerce')
                 
@@ -145,11 +151,19 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Activity_Type'] == 'SOLD']
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
-                # Filter SELL transactions by cutoff date (keep only before cutoff)
+                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Date'] >= target_fy_start) & 
+                    (sell_transactions['Date'] <= target_fy_end)
+                ]
                 
-                # Keep ALL BUY transactions (no filtering)
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -164,7 +178,7 @@ def load_existing_csv_files(financial_year):
             
             # Format 2: Parsed format (Symbol, Trade Date, Type, Quantity, Price (USD))
             elif all(col in df.columns for col in ['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)']):
-                # Apply hybrid filtering
+                # Apply FIXED hybrid filtering
                 df_copy = df.copy()
                 df_copy['Trade Date'] = pd.to_datetime(df_copy['Trade Date'])
                 
@@ -172,11 +186,19 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Type'] == 'SELL']
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
-                # Filter SELL transactions by cutoff date (keep only before cutoff)
+                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Trade Date'] >= target_fy_start) & 
+                    (sell_transactions['Trade Date'] <= target_fy_end)
+                ]
                 
-                # Keep ALL BUY transactions (no filtering)
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -200,12 +222,18 @@ def load_existing_csv_files(financial_year):
     
     return all_transactions
 
+# ALSO REPLACE the process_uploaded_csv_files function in app.py with this FIXED version:
+
 def process_uploaded_csv_files(uploaded_files, financial_year):
     """Process uploaded CSV files"""
     
     # Determine cutoff date for hybrid processing
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
+    
+    # FIXED: Calculate target FY range for sales
+    target_fy_start = datetime(fy_year, 7, 1)
+    target_fy_end = datetime(fy_year + 1, 6, 30)
     
     all_transactions = []
     
@@ -223,8 +251,19 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 sell_transactions = df_copy[df_copy['Activity_Type'] == 'SOLD']
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
+                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Date'] >= target_fy_start) & 
+                    (sell_transactions['Date'] <= target_fy_end)
+                ]
+                
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
@@ -244,8 +283,19 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 sell_transactions = df_copy[df_copy['Type'] == 'SELL']
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
+                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Trade Date'] >= target_fy_start) & 
+                    (sell_transactions['Trade Date'] <= target_fy_end)
+                ]
+                
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
