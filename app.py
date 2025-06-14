@@ -131,46 +131,75 @@ def standardize_csv_format(df, filename, cutoff_date):
         df = df.dropna(how='all')
         
         st.text(f"   🔍 Detecting format for {filename}...")
+        st.text(f"   📊 Columns found: {list(df.columns)}")
+        st.text(f"   📊 Data shape: {df.shape}")
         
         # Case 1: Interactive Brokers format (Symbol, Trade Date, Type, Quantity, Price (USD), etc.)
         if 'Symbol' in df.columns and 'Trade Date' in df.columns and 'Type' in df.columns:
             st.text("   📋 Detected: Interactive Brokers CSV format")
-            return standardize_ib_format(df, cutoff_date)
+            return standardize_ib_format(df, cutoff_date, filename)
         
         # Case 2: Manual transactions format (Date, Activity_Type, Symbol, Quantity, Price_USD, etc.)
         elif 'Activity_Type' in df.columns and 'Symbol' in df.columns and 'Date' in df.columns:
             st.text("   📋 Detected: Manual transactions format")
-            return standardize_manual_format(df, cutoff_date)
+            return standardize_manual_format(df, cutoff_date, filename)
         
         # Case 3: Generic trading format (try to detect common patterns)
         elif any(col.lower() in ['symbol', 'ticker'] for col in df.columns):
             st.text("   📋 Detected: Generic trading format (attempting auto-detection)")
-            return standardize_generic_format(df, cutoff_date)
+            return standardize_generic_format(df, cutoff_date, filename)
         
         else:
             st.warning(f"   ❌ Unsupported CSV format in {filename}")
             st.text(f"   📋 Available columns: {list(df.columns)}")
-            st.text("   💡 Supported formats:")
-            st.text("      • Interactive Brokers CSV exports")
-            st.text("      • Manual transaction CSVs (Date, Activity_Type, Symbol, Quantity, Price_USD)")
-            st.text("      • Generic trading CSVs with Symbol/Ticker column")
+            st.text("   💡 Expected column patterns:")
+            st.text("      • IB format: Symbol, Trade Date, Type, Quantity, Price (USD)")
+            st.text("      • Manual format: Date, Activity_Type, Symbol, Quantity, Price_USD")
+            st.text("      • Generic: Symbol/Ticker + Date + Type/Action + Quantity + Price")
+            
+            # Show first few rows for debugging
+            st.text("   📋 First 3 rows of data:")
+            for i, row in df.head(3).iterrows():
+                st.text(f"      Row {i}: {dict(row)}")
+            
             return None
             
     except Exception as e:
         st.error(f"❌ Error standardizing {filename}: {e}")
+        st.code(traceback.format_exc())
         return None
 
-def standardize_ib_format(df, cutoff_date):
+def standardize_ib_format(df, cutoff_date, filename):
     """Standardize Interactive Brokers CSV format."""
     try:
+        st.text(f"   🔄 Processing IB format for {filename}...")
+        
         # Convert Trade Date to datetime
         df['Trade Date'] = pd.to_datetime(df['Trade Date'])
         
-        # Apply cutoff date filtering (only for SELL transactions)
+        st.text(f"   📅 Date range in file: {df['Trade Date'].min()} to {df['Trade Date'].max()}")
+        st.text(f"   📊 Transaction types: {df['Type'].value_counts().to_dict()}")
+        
+        # Show transactions before filtering
+        st.text(f"   📊 Before filtering: {len(df)} transactions")
+        
+        # Apply cutoff date filtering (only for SELL transactions - exclude FUTURE sales)
         if cutoff_date:
+            st.text(f"   ⏰ Cutoff date: {cutoff_date} (excluding sales AFTER this date)")
             sell_mask = df['Type'] == 'SELL'
             future_sells = sell_mask & (df['Trade Date'] > cutoff_date)
+            
+            st.text(f"   📉 Total SELL transactions: {sell_mask.sum()}")
+            st.text(f"   ⏭️ Future SELL transactions (after {cutoff_date}): {future_sells.sum()}")
+            
+            if future_sells.sum() > 0:
+                st.text(f"   📋 Future sales being excluded:")
+                future_sales_info = df[future_sells][['Symbol', 'Trade Date', 'Type', 'Quantity']]
+                for _, row in future_sales_info.iterrows():
+                    st.text(f"      • {row['Symbol']}: {row['Trade Date'].strftime('%Y-%m-%d')} ({row['Type']} {row['Quantity']})")
+            
             df = df[~future_sells]  # Remove future sells
+            st.text(f"   ✅ After filtering: {len(df)} transactions kept")
         
         # Create standardized format
         standardized = pd.DataFrame()
@@ -196,28 +225,55 @@ def standardize_ib_format(df, cutoff_date):
         else:
             standardized['Commission'] = 0  # Default commission
         
-        standardized['Source'] = f'CSV_IB'
+        standardized['Source'] = f'CSV_{filename}'
         
         # Remove invalid entries
+        before_cleanup = len(standardized)
         standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
         standardized = standardized[standardized['Quantity'] > 0]
+        after_cleanup = len(standardized)
+        
+        st.text(f"   🧹 After cleanup: {after_cleanup} valid transactions (removed {before_cleanup - after_cleanup})")
+        
+        if len(standardized) > 0:
+            activity_breakdown = standardized['Activity'].value_counts().to_dict()
+            st.text(f"   📊 Final activity breakdown: {activity_breakdown}")
+            
+            # Show which sales are included
+            if 'SOLD' in activity_breakdown:
+                sales_df = standardized[standardized['Activity'] == 'SOLD']
+                if len(sales_df) > 0:
+                    st.text(f"   📋 Sales included in processing:")
+                    for _, row in sales_df.iterrows():
+                        st.text(f"      • {row['Symbol']}: {row['Date']} ({row['Quantity']} shares)")
         
         return standardized
         
     except Exception as e:
         st.error(f"❌ Error processing IB format: {e}")
+        st.code(traceback.format_exc())
         return None
 
-def standardize_manual_format(df, cutoff_date):
+def standardize_manual_format(df, cutoff_date, filename):
     """Standardize manual transaction CSV format."""
     try:
+        st.text(f"   🔄 Processing manual format for {filename}...")
+        
         # Convert Date to datetime (handle DD.M.YY format)
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         
+        st.text(f"   📅 Date range in file: {df['Date'].min()} to {df['Date'].max()}")
+        st.text(f"   📊 Activity types: {df['Activity_Type'].value_counts().to_dict()}")
+        
         # Apply cutoff date filtering (only for SELL transactions)
         if cutoff_date:
+            st.text(f"   ⏰ Applying cutoff date: {cutoff_date}")
             sell_mask = df['Activity_Type'] == 'SOLD'
             future_sells = sell_mask & (df['Date'] > cutoff_date)
+            
+            st.text(f"   📉 SOLD transactions: {sell_mask.sum()}")
+            st.text(f"   ⏭️ Future SOLD transactions: {future_sells.sum()}")
+            
             df = df[~future_sells]  # Remove future sells
         
         # Create standardized format
@@ -228,21 +284,27 @@ def standardize_manual_format(df, cutoff_date):
         standardized['Quantity'] = df['Quantity'].abs()
         standardized['Price'] = df['Price_USD'].abs()
         standardized['Commission'] = 30.0  # Default commission for manual entries
-        standardized['Source'] = f'CSV_Manual'
+        standardized['Source'] = f'CSV_{filename}'
         
         # Remove invalid entries
+        before_cleanup = len(standardized)
         standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
         standardized = standardized[standardized['Quantity'] > 0]
+        after_cleanup = len(standardized)
+        
+        st.text(f"   🧹 After cleanup: {after_cleanup} valid transactions (removed {before_cleanup - after_cleanup})")
         
         return standardized
         
     except Exception as e:
         st.error(f"❌ Error processing manual format: {e}")
+        st.code(traceback.format_exc())
         return None
 
-def standardize_generic_format(df, cutoff_date):
+def standardize_generic_format(df, cutoff_date, filename):
     """Attempt to standardize generic CSV format by detecting common patterns."""
     try:
+        st.text(f"   🔄 Processing generic format for {filename}...")
         st.text("   🔍 Attempting generic format detection...")
         
         # Find symbol column
@@ -312,12 +374,19 @@ def standardize_generic_format(df, cutoff_date):
         # Convert and standardize
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
         
+        st.text(f"   📅 Date range: {df[date_col].min()} to {df[date_col].max()}")
+        
         # Apply cutoff date filtering
         if cutoff_date:
+            st.text(f"   ⏰ Applying cutoff date: {cutoff_date}")
             # Try to detect sell transactions
             sell_keywords = ['sell', 'sold', 'sale', 'short']
             sell_mask = df[type_col].astype(str).str.lower().str.contains('|'.join(sell_keywords), na=False)
             future_sells = sell_mask & (df[date_col] > cutoff_date)
+            
+            st.text(f"   📉 SELL-like transactions: {sell_mask.sum()}")
+            st.text(f"   ⏭️ Future SELL transactions: {future_sells.sum()}")
+            
             df = df[~future_sells]
         
         # Create standardized format
@@ -353,16 +422,21 @@ def standardize_generic_format(df, cutoff_date):
         else:
             standardized['Commission'] = 10.0  # Default commission
         
-        standardized['Source'] = f'CSV_Generic'
+        standardized['Source'] = f'CSV_{filename}'
         
         # Remove invalid entries
+        before_cleanup = len(standardized)
         standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
         standardized = standardized[standardized['Quantity'] > 0]
+        after_cleanup = len(standardized)
+        
+        st.text(f"   🧹 After cleanup: {after_cleanup} valid transactions (removed {before_cleanup - after_cleanup})")
         
         return standardized
         
     except Exception as e:
         st.error(f"❌ Error processing generic format: {e}")
+        st.code(traceback.format_exc())
         return None
     """Initialize the RBA AUD converter with your rates directory."""
     try:
@@ -633,9 +707,13 @@ def process_files_enhanced(html_files, csv_files, temp_dir, financial_year, aud_
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    # Determine cutoff date for hybrid processing
+    # FIXED: Cutoff date should be END of target financial year, not beginning
     fy_year = int(financial_year.split('-')[0])
-    cutoff_date = datetime(fy_year, 6, 30)  # End of financial year
+    cutoff_date = datetime(fy_year + 1, 6, 30)  # END of target financial year
+    
+    st.info(f"🎯 Processing for FY {financial_year}")
+    st.info(f"📅 FY {financial_year} period: July 1, {fy_year} to June 30, {fy_year + 1}")
+    st.info(f"⏰ Sales cutoff: {cutoff_date.strftime('%Y-%m-%d')} (excludes future sales)")
     
     all_data = []
     total_files = len(html_files or []) + len(csv_files or [])
