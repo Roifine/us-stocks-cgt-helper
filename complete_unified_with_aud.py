@@ -478,85 +478,170 @@ def load_html_files_hybrid(sell_cutoff_date=None):
     
     return html_data
 
-def load_manual_csv_files_hybrid(sell_cutoff_date=None):
-    """Load manual CSV files with hybrid filtering."""
-    print(f"\n📁 LOADING MANUAL CSV FILES (HYBRID MODE)")
+#!/usr/bin/env python3
+"""
+Fix for CSV Loading Issue in complete_unified_with_aud.py
+
+Replace the load_manual_csv_files_hybrid() function with this enhanced version
+"""
+
+def load_manual_csv_files_hybrid_FIXED(sell_cutoff_date=None):
+    """Load ALL CSV files with transaction data, not just 'manual' files."""
+    print(f"\n📁 LOADING ALL CSV TRANSACTION FILES (FIXED VERSION)")
     if sell_cutoff_date:
         print(f"⏹️ SELL cutoff date: {sell_cutoff_date.strftime('%Y-%m-%d')}")
     print(f"📈 BUY transactions: Include ALL (no cutoff)")
-    print("=" * 50)
+    print("=" * 60)
     
     manual_data = []
-    manual_files = [f for f in glob.glob("*.csv") if 'manual' in f.lower()]
     
-    if manual_files:
-        print(f"📄 Found {len(manual_files)} manual CSV files:")
-        for manual_file in manual_files:
-            print(f"   • {manual_file}")
+    # FIXED: Look for ALL CSV files in multiple locations, not just "manual" ones
+    all_csv_files = []
+    
+    # 1. Current directory CSV files
+    current_dir_csvs = [f for f in glob.glob("*.csv")]
+    all_csv_files.extend(current_dir_csvs)
+    
+    # 2. csv_folder directory CSV files
+    csv_folder_files = [f for f in glob.glob("csv_folder/*.csv")]
+    all_csv_files.extend(csv_folder_files)
+    
+    # 3. Filter for transaction files (exclude sales-only files)
+    transaction_files = []
+    for csv_file in all_csv_files:
+        # Skip files that are clearly sales-only
+        if 'sales_only' in csv_file.lower():
+            print(f"   ⏩ Skipping sales-only file: {os.path.basename(csv_file)}")
+            continue
+        # Skip files that might be reports or outputs
+        if any(keyword in csv_file.lower() for keyword in ['report', 'output', 'cgt_', 'result']):
+            print(f"   ⏩ Skipping output file: {os.path.basename(csv_file)}")
+            continue
+        transaction_files.append(csv_file)
+    
+    if transaction_files:
+        print(f"📄 Found {len(transaction_files)} potential transaction files:")
+        for file in transaction_files:
+            print(f"   • {file}")
     else:
-        print("📄 No manual CSV files found")
+        print("📄 No CSV transaction files found")
+        return manual_data
     
-    for csv_file in manual_files:
+    # Process each transaction file
+    for csv_file in transaction_files:
         try:
             df = pd.read_csv(csv_file)
             print(f"\n🔄 Processing {csv_file}:")
+            print(f"   📊 Shape: {df.shape}")
+            print(f"   📋 Columns: {list(df.columns)}")
             
-            # Check for expected columns
-            expected_columns = ['Date', 'Activity_Type', 'Symbol', 'Quantity', 'Price_USD', 'USD_Amount', 'AUD_Amount']
-            missing = [col for col in expected_columns if col not in df.columns]
+            # Detect file format and standardize
+            standardized = None
             
-            if missing:
-                print(f"   ❌ Missing expected columns: {missing}")
+            # Format 1: Manual CSV format (Date, Activity_Type, Symbol, Quantity, Price_USD, etc.)
+            if all(col in df.columns for col in ['Date', 'Activity_Type', 'Symbol', 'Quantity', 'Price_USD']):
+                print(f"   📝 Detected: Manual CSV format")
+                
+                # Apply hybrid filtering for manual CSV
+                if sell_cutoff_date:
+                    df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%y', errors='coerce')
+                    
+                    # Split into SELL and BUY transactions
+                    sell_transactions = df[df['Activity_Type'] == 'SOLD']
+                    buy_transactions = df[df['Activity_Type'] == 'PURCHASED']
+                    
+                    # Filter SELL transactions by cutoff date
+                    sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= sell_cutoff_date]
+                    sell_filtered_count = len(sell_transactions) - len(sell_before_cutoff)
+                    
+                    # Keep ALL BUY transactions
+                    df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                    
+                    if sell_filtered_count > 0:
+                        print(f"   ⏹️ Filtered {sell_filtered_count} SELL transactions after cutoff")
+                    
+                    df = df_filtered
+                
+                # Create standardized DataFrame
+                standardized = pd.DataFrame()
+                standardized['Symbol'] = df['Symbol']
+                standardized['Date'] = df['Date'].astype(str)
+                standardized['Activity'] = df['Activity_Type'].map({'PURCHASED': 'PURCHASED', 'SOLD': 'SOLD'})
+                standardized['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').abs()
+                standardized['Price'] = pd.to_numeric(df['Price_USD'], errors='coerce').abs()
+                standardized['Commission'] = 30.0  # Default for manual transactions
+                standardized['Source'] = f'Manual_{os.path.basename(csv_file)}'
+            
+            # Format 2: Parsed format (Symbol, Trade Date, Type, Quantity, Price (USD), etc.)
+            elif all(col in df.columns for col in ['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)']):
+                print(f"   📝 Detected: Parsed HTML format")
+                
+                # Apply hybrid filtering for parsed CSV
+                if sell_cutoff_date:
+                    df['Trade Date'] = pd.to_datetime(df['Trade Date'])
+                    
+                    # Split into SELL and BUY transactions
+                    sell_transactions = df[df['Type'] == 'SELL']
+                    buy_transactions = df[df['Type'] == 'BUY']
+                    
+                    # Filter SELL transactions by cutoff date
+                    sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= sell_cutoff_date]
+                    sell_filtered_count = len(sell_transactions) - len(sell_before_cutoff)
+                    
+                    # Keep ALL BUY transactions
+                    df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                    
+                    if sell_filtered_count > 0:
+                        print(f"   ⏹️ Filtered {sell_filtered_count} SELL transactions after cutoff")
+                    
+                    df = df_filtered
+                
+                # Create standardized DataFrame
+                standardized = pd.DataFrame()
+                standardized['Symbol'] = df['Symbol']
+                standardized['Date'] = df['Trade Date'].astype(str)
+                standardized['Activity'] = df['Type'].map({'BUY': 'PURCHASED', 'SELL': 'SOLD'})
+                standardized['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').abs()
+                standardized['Price'] = pd.to_numeric(df['Price (USD)'], errors='coerce').abs()
+                standardized['Commission'] = pd.to_numeric(df.get('Commission (USD)', 0), errors='coerce').abs()
+                standardized['Source'] = f'Parsed_{os.path.basename(csv_file)}'
+            
+            else:
+                print(f"   ❌ Unknown CSV format - skipping")
                 continue
             
-            # HYBRID FILTERING for manual CSV
-            if sell_cutoff_date:
-                df['Date'] = pd.to_datetime(df['Date'])
+            # Clean up and validate
+            if standardized is not None:
+                standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
                 
-                # Split into SELL and BUY transactions
-                sell_transactions = df[df['Activity_Type'] == 'SOLD']
-                buy_transactions = df[df['Activity_Type'] == 'PURCHASED']
-                
-                # Filter SELL transactions by cutoff date
-                sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= sell_cutoff_date]
-                sell_filtered_count = len(sell_transactions) - len(sell_before_cutoff)
-                
-                # Keep ALL BUY transactions
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
-                
-                if sell_filtered_count > 0:
-                    print(f"   ⏹️ Filtered {sell_filtered_count} SELL transactions after cutoff")
-                
-                df = df_filtered
-            
-            # Create standardized DataFrame
-            standardized = pd.DataFrame()
-            standardized['Symbol'] = df['Symbol']
-            standardized['Date'] = df['Date'].astype(str)
-            standardized['Activity'] = df['Activity_Type'].map({'PURCHASED': 'PURCHASED', 'SOLD': 'SOLD'})
-            standardized['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').abs()
-            standardized['Price'] = pd.to_numeric(df['Price_USD'], errors='coerce').abs()
-            standardized['Commission'] = 30.0  # Default for manual transactions
-            standardized['Source'] = f'Manual_{os.path.basename(csv_file)}'
-            
-            # Clean up
-            standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
-            
-            if len(standardized) > 0:
-                manual_data.append(standardized)
-                
-                # Show breakdown
-                buy_count = len(standardized[standardized['Activity'] == 'PURCHASED'])
-                sell_count = len(standardized[standardized['Activity'] == 'SOLD'])
-                print(f"   ✅ Processed: {buy_count} BUYs, {sell_count} SELLs")
+                if len(standardized) > 0:
+                    manual_data.append(standardized)
+                    
+                    # Show breakdown
+                    buy_count = len(standardized[standardized['Activity'] == 'PURCHASED'])
+                    sell_count = len(standardized[standardized['Activity'] == 'SOLD'])
+                    symbols = sorted(standardized['Symbol'].unique())
+                    
+                    print(f"   ✅ Processed: {buy_count} BUYs, {sell_count} SELLs")
+                    print(f"   🏷️  Symbols: {symbols}")
+                else:
+                    print(f"   ⚠️ No valid transactions after processing")
             
         except Exception as e:
             print(f"   ❌ Error loading {csv_file}: {e}")
+            import traceback
+            print(f"   🔧 Debug: {traceback.format_exc()}")
     
     total_manual_transactions = sum(len(df) for df in manual_data)
-    print(f"📊 Total manual transactions loaded: {total_manual_transactions}")
+    print(f"📊 Total transactions loaded: {total_manual_transactions}")
     
     return manual_data
+
+
+# USAGE: Replace the function in complete_unified_with_aud.py
+# Find this line in the file:
+# def load_manual_csv_files_hybrid(sell_cutoff_date=None):
+# And replace the entire function with the version above
 
 def apply_hybrid_fifo_processing_with_aud(combined_df, aud_converter, sell_cutoff_date=None):
     """Apply HYBRID FIFO processing with AUD conversion."""
