@@ -55,22 +55,425 @@ if 'excel_data' not in st.session_state:
 if 'filename' not in st.session_state:
     st.session_state.filename = None
 
-def validate_html_files(uploaded_files):
-    """Validate uploaded HTML files."""
-    if not uploaded_files:
-        return False, "Please upload at least one HTML file"
+def validate_uploaded_files(html_files, csv_files):
+    """Validate uploaded HTML and CSV files."""
+    total_files = len(html_files or []) + len(csv_files or [])
     
-    if len(uploaded_files) > 5:
-        return False, "Maximum 5 files allowed"
+    if total_files == 0:
+        return False, "Please upload at least one HTML or CSV file"
     
-    for file in uploaded_files:
-        if file.size > 20 * 1024 * 1024:  # 20MB limit
-            return False, f"File {file.name} is too large (max 20MB)"
-        
-        if not file.name.lower().endswith(('.html', '.htm')):
-            return False, f"File {file.name} is not an HTML file"
+    if total_files > 10:
+        return False, "Maximum 10 files allowed (HTML + CSV combined)"
+    
+    # Validate HTML files
+    if html_files:
+        for file in html_files:
+            if file.size > 20 * 1024 * 1024:  # 20MB limit
+                return False, f"File {file.name} is too large (max 20MB)"
+            
+            if not file.name.lower().endswith(('.html', '.htm')):
+                return False, f"File {file.name} is not an HTML file"
+    
+    # Validate CSV files
+    if csv_files:
+        for file in csv_files:
+            if file.size > 10 * 1024 * 1024:  # 10MB limit for CSV
+                return False, f"File {file.name} is too large (max 10MB)"
+            
+            if not file.name.lower().endswith('.csv'):
+                return False, f"File {file.name} is not a CSV file"
     
     return True, "Files validated successfully"
+
+def process_csv_files(csv_files, temp_dir, cutoff_date):
+    """Process CSV files and convert to standardized format."""
+    if not csv_files:
+        return []
+    
+    all_csv_data = []
+    
+    for i, uploaded_file in enumerate(csv_files):
+        st.text(f"Processing CSV: {uploaded_file.name}...")
+        
+        try:
+            # Save uploaded file temporarily
+            temp_csv_path = os.path.join(temp_dir, uploaded_file.name)
+            with open(temp_csv_path, 'wb') as f:
+                f.write(uploaded_file.getbuffer())
+            
+            # Read CSV file
+            df = pd.read_csv(temp_csv_path)
+            
+            st.text(f"   📊 Found {len(df)} rows with columns: {list(df.columns)}")
+            
+            # Try to detect the CSV format and standardize it
+            standardized_df = standardize_csv_format(df, uploaded_file.name, cutoff_date)
+            
+            if standardized_df is not None and len(standardized_df) > 0:
+                all_csv_data.append(standardized_df)
+                st.success(f"✅ {uploaded_file.name}: {len(standardized_df)} transactions processed")
+            else:
+                st.warning(f"⚠️ {uploaded_file.name}: No valid transactions found or unsupported format")
+                
+        except Exception as e:
+            st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
+            continue
+    
+    return all_csv_data
+
+def standardize_csv_format(df, filename, cutoff_date):
+    """Convert various CSV formats to standardized format."""
+    try:
+        # Make a copy to avoid modifying original
+        df = df.copy()
+        
+        # Remove any completely empty rows
+        df = df.dropna(how='all')
+        
+        st.text(f"   🔍 Detecting format for {filename}...")
+        
+        # Case 1: Interactive Brokers format (Symbol, Trade Date, Type, Quantity, Price (USD), etc.)
+        if 'Symbol' in df.columns and 'Trade Date' in df.columns and 'Type' in df.columns:
+            st.text("   📋 Detected: Interactive Brokers CSV format")
+            return standardize_ib_format(df, cutoff_date)
+        
+        # Case 2: Manual transactions format (Date, Activity_Type, Symbol, Quantity, Price_USD, etc.)
+        elif 'Activity_Type' in df.columns and 'Symbol' in df.columns and 'Date' in df.columns:
+            st.text("   📋 Detected: Manual transactions format")
+            return standardize_manual_format(df, cutoff_date)
+        
+        # Case 3: Generic trading format (try to detect common patterns)
+        elif any(col.lower() in ['symbol', 'ticker'] for col in df.columns):
+            st.text("   📋 Detected: Generic trading format (attempting auto-detection)")
+            return standardize_generic_format(df, cutoff_date)
+        
+        else:
+            st.warning(f"   ❌ Unsupported CSV format in {filename}")
+            st.text(f"   📋 Available columns: {list(df.columns)}")
+            st.text("   💡 Supported formats:")
+            st.text("      • Interactive Brokers CSV exports")
+            st.text("      • Manual transaction CSVs (Date, Activity_Type, Symbol, Quantity, Price_USD)")
+            st.text("      • Generic trading CSVs with Symbol/Ticker column")
+            return None
+            
+    except Exception as e:
+        st.error(f"❌ Error standardizing {filename}: {e}")
+        return None
+
+def standardize_ib_format(df, cutoff_date):
+    """Standardize Interactive Brokers CSV format."""
+    try:
+        # Convert Trade Date to datetime
+        df['Trade Date'] = pd.to_datetime(df['Trade Date'])
+        
+        # Apply cutoff date filtering (only for SELL transactions)
+        if cutoff_date:
+            sell_mask = df['Type'] == 'SELL'
+            future_sells = sell_mask & (df['Trade Date'] > cutoff_date)
+            df = df[~future_sells]  # Remove future sells
+        
+        # Create standardized format
+        standardized = pd.DataFrame()
+        standardized['Symbol'] = df['Symbol']
+        standardized['Date'] = df['Trade Date'].dt.strftime('%Y-%m-%d')
+        standardized['Activity'] = df['Type'].map({'BUY': 'PURCHASED', 'SELL': 'SOLD'})
+        standardized['Quantity'] = df['Quantity'].abs()
+        
+        # Handle different price column names
+        if 'Price (USD)' in df.columns:
+            standardized['Price'] = df['Price (USD)'].abs()
+        elif 'Price' in df.columns:
+            standardized['Price'] = df['Price'].abs()
+        else:
+            st.warning("⚠️ No price column found, using 0")
+            standardized['Price'] = 0
+        
+        # Handle commission
+        if 'Commission (USD)' in df.columns:
+            standardized['Commission'] = df['Commission (USD)'].abs()
+        elif 'Commission' in df.columns:
+            standardized['Commission'] = df['Commission'].abs()
+        else:
+            standardized['Commission'] = 0  # Default commission
+        
+        standardized['Source'] = f'CSV_IB'
+        
+        # Remove invalid entries
+        standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
+        standardized = standardized[standardized['Quantity'] > 0]
+        
+        return standardized
+        
+    except Exception as e:
+        st.error(f"❌ Error processing IB format: {e}")
+        return None
+
+def standardize_manual_format(df, cutoff_date):
+    """Standardize manual transaction CSV format."""
+    try:
+        # Convert Date to datetime (handle DD.M.YY format)
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
+        # Apply cutoff date filtering (only for SELL transactions)
+        if cutoff_date:
+            sell_mask = df['Activity_Type'] == 'SOLD'
+            future_sells = sell_mask & (df['Date'] > cutoff_date)
+            df = df[~future_sells]  # Remove future sells
+        
+        # Create standardized format
+        standardized = pd.DataFrame()
+        standardized['Symbol'] = df['Symbol']
+        standardized['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
+        standardized['Activity'] = df['Activity_Type'].map({'PURCHASED': 'PURCHASED', 'SOLD': 'SOLD'})
+        standardized['Quantity'] = df['Quantity'].abs()
+        standardized['Price'] = df['Price_USD'].abs()
+        standardized['Commission'] = 30.0  # Default commission for manual entries
+        standardized['Source'] = f'CSV_Manual'
+        
+        # Remove invalid entries
+        standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
+        standardized = standardized[standardized['Quantity'] > 0]
+        
+        return standardized
+        
+    except Exception as e:
+        st.error(f"❌ Error processing manual format: {e}")
+        return None
+
+def standardize_generic_format(df, cutoff_date):
+    """Attempt to standardize generic CSV format by detecting common patterns."""
+    try:
+        st.text("   🔍 Attempting generic format detection...")
+        
+        # Find symbol column
+        symbol_col = None
+        for col in df.columns:
+            if col.lower() in ['symbol', 'ticker', 'stock']:
+                symbol_col = col
+                break
+        
+        if not symbol_col:
+            st.error("❌ No symbol/ticker column found")
+            return None
+        
+        # Find date column
+        date_col = None
+        for col in df.columns:
+            if 'date' in col.lower() or 'time' in col.lower():
+                date_col = col
+                break
+        
+        if not date_col:
+            st.error("❌ No date column found")
+            return None
+        
+        # Find transaction type column
+        type_col = None
+        for col in df.columns:
+            if any(keyword in col.lower() for keyword in ['type', 'action', 'side', 'activity']):
+                type_col = col
+                break
+        
+        if not type_col:
+            st.error("❌ No transaction type column found")
+            return None
+        
+        # Find quantity column
+        qty_col = None
+        for col in df.columns:
+            if any(keyword in col.lower() for keyword in ['quantity', 'qty', 'shares', 'units']):
+                qty_col = col
+                break
+        
+        if not qty_col:
+            st.error("❌ No quantity column found")
+            return None
+        
+        # Find price column
+        price_col = None
+        for col in df.columns:
+            if 'price' in col.lower() and 'usd' in col.lower():
+                price_col = col
+                break
+        
+        if not price_col:
+            # Try just 'price'
+            for col in df.columns:
+                if col.lower() == 'price':
+                    price_col = col
+                    break
+        
+        if not price_col:
+            st.error("❌ No price column found")
+            return None
+        
+        st.text(f"   ✅ Detected columns: {symbol_col}, {date_col}, {type_col}, {qty_col}, {price_col}")
+        
+        # Convert and standardize
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        
+        # Apply cutoff date filtering
+        if cutoff_date:
+            # Try to detect sell transactions
+            sell_keywords = ['sell', 'sold', 'sale', 'short']
+            sell_mask = df[type_col].astype(str).str.lower().str.contains('|'.join(sell_keywords), na=False)
+            future_sells = sell_mask & (df[date_col] > cutoff_date)
+            df = df[~future_sells]
+        
+        # Create standardized format
+        standardized = pd.DataFrame()
+        standardized['Symbol'] = df[symbol_col]
+        standardized['Date'] = df[date_col].dt.strftime('%Y-%m-%d')
+        
+        # Map transaction types
+        def map_activity(activity_str):
+            if pd.isna(activity_str):
+                return None
+            activity_lower = str(activity_str).lower()
+            if any(keyword in activity_lower for keyword in ['buy', 'purchase', 'long']):
+                return 'PURCHASED'
+            elif any(keyword in activity_lower for keyword in ['sell', 'sold', 'sale', 'short']):
+                return 'SOLD'
+            else:
+                return None
+        
+        standardized['Activity'] = df[type_col].apply(map_activity)
+        standardized['Quantity'] = pd.to_numeric(df[qty_col], errors='coerce').abs()
+        standardized['Price'] = pd.to_numeric(df[price_col], errors='coerce').abs()
+        
+        # Try to find commission column
+        commission_col = None
+        for col in df.columns:
+            if 'commission' in col.lower() or 'fee' in col.lower():
+                commission_col = col
+                break
+        
+        if commission_col:
+            standardized['Commission'] = pd.to_numeric(df[commission_col], errors='coerce').abs()
+        else:
+            standardized['Commission'] = 10.0  # Default commission
+        
+        standardized['Source'] = f'CSV_Generic'
+        
+        # Remove invalid entries
+        standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity'])
+        standardized = standardized[standardized['Quantity'] > 0]
+        
+        return standardized
+        
+    except Exception as e:
+        st.error(f"❌ Error processing generic format: {e}")
+        return None
+    """Initialize the RBA AUD converter with your rates directory."""
+    try:
+        st.text("🔍 Looking for RBA exchange rate files...")
+        
+        # Try different possible locations for rates directory
+        possible_directories = [
+            "./rates",
+            "../rates", 
+            "/Users/roifine/My python projects/Ozi_Tax_Agent/rates",
+            os.path.join(os.getcwd(), "rates")
+        ]
+        
+        rates_directory = None
+        for directory in possible_directories:
+            if os.path.exists(directory):
+                rates_directory = directory
+                st.text(f"✅ Found rates directory: {directory}")
+                break
+        
+        if not rates_directory:
+            st.error(f"❌ Rates directory not found. Checked: {possible_directories}")
+            return None
+        
+        # Find RBA CSV files
+        st.text(f"🔍 Looking for FX CSV files in {rates_directory}...")
+        all_files = os.listdir(rates_directory)
+        st.text(f"📁 Files in rates directory: {all_files}")
+        
+        rba_files = []
+        for file in all_files:
+            if file.endswith('.csv') and ('FX_' in file or 'fx_' in file.lower()):
+                full_path = os.path.join(rates_directory, file)
+                rba_files.append(full_path)
+                st.text(f"✅ Found RBA file: {file}")
+        
+        if not rba_files:
+            st.error(f"❌ No RBA CSV files found in {rates_directory}")
+            return None
+        
+        st.text(f"📊 Initializing RBA converter with {len(rba_files)} files...")
+        
+        # Initialize converter
+        aud_converter = RBAAUDConverter()
+        
+        # FIXED: Parse the RBA F11.1 format manually since the built-in parser expects different format
+        st.text("🔧 Using custom RBA F11.1 format parser...")
+        
+        total_rates_loaded = 0
+        
+        for rba_file in rba_files:
+            try:
+                st.text(f"📄 Parsing {os.path.basename(rba_file)}...")
+                
+                with open(rba_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Parse using regex (we know this works from the test)
+                import re
+                from datetime import datetime
+                
+                pattern = r'(\d{2}-[A-Za-z]{3}-\d{4})\s*[,\t]\s*([0-9.]+)'
+                matches = re.findall(pattern, content)
+                
+                rates_added = 0
+                for date_str, rate_str in matches:
+                    try:
+                        # Parse date from DD-MMM-YYYY format  
+                        date_obj = datetime.strptime(date_str, '%d-%b-%Y')
+                        rate = float(rate_str)
+                        
+                        # Store as YYYY-MM-DD string for easy lookup
+                        date_key = date_obj.strftime('%Y-%m-%d')
+                        aud_converter.exchange_rates[date_key] = rate
+                        rates_added += 1
+                        
+                    except ValueError as e:
+                        continue  # Skip invalid dates/rates
+                
+                st.text(f"   ✅ Added {rates_added} rates from {os.path.basename(rba_file)}")
+                total_rates_loaded += rates_added
+                
+            except Exception as e:
+                st.error(f"❌ Error parsing {rba_file}: {e}")
+                continue
+        
+        # Check if rates were loaded
+        if total_rates_loaded > 0:
+            st.text(f"✅ Successfully loaded {total_rates_loaded} exchange rates")
+            
+            # Show date range
+            if aud_converter.exchange_rates:
+                dates = list(aud_converter.exchange_rates.keys())
+                min_date = min(dates)
+                max_date = max(dates)
+                st.text(f"📅 Date range: {min_date} to {max_date}")
+                
+                # Show sample rates
+                st.text("📋 Sample rates loaded:")
+                for i, (date, rate) in enumerate(list(aud_converter.exchange_rates.items())[:3]):
+                    st.text(f"   {date}: {rate:.4f}")
+            
+            return aud_converter
+        else:
+            st.error("❌ No exchange rates were successfully parsed")
+            return None
+        
+    except Exception as e:
+        st.error(f"❌ Error initializing AUD converter: {e}")
+        st.code(traceback.format_exc())
+        return None
 
 def initialize_aud_converter():
     """Initialize the RBA AUD converter with your rates directory."""
@@ -225,8 +628,8 @@ def check_exchange_rates(aud_converter):
         st.code(traceback.format_exc())
         return False
 
-def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_converter):
-    """Process HTML files using your enhanced AUD system."""
+def process_files_enhanced(html_files, csv_files, temp_dir, financial_year, aud_converter):
+    """Process both HTML and CSV files using your enhanced AUD system."""
     progress_bar = st.progress(0)
     status_text = st.empty()
     
@@ -235,39 +638,55 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_co
     cutoff_date = datetime(fy_year, 6, 30)  # End of financial year
     
     all_data = []
+    total_files = len(html_files or []) + len(csv_files or [])
+    current_file = 0
     
-    for i, uploaded_file in enumerate(uploaded_files):
-        status_text.text(f"Processing {uploaded_file.name}...")
+    # Process HTML files first
+    if html_files:
+        status_text.text("Processing HTML files...")
         
-        # Save uploaded file temporarily
-        temp_html_path = os.path.join(temp_dir, uploaded_file.name)
-        with open(temp_html_path, 'wb') as f:
-            f.write(uploaded_file.getbuffer())
-        
-        try:
-            # Parse HTML with hybrid filtering using your existing function
-            df = parse_html_file_with_hybrid_filtering(temp_html_path, cutoff_date)
+        for uploaded_file in html_files:
+            status_text.text(f"Processing HTML: {uploaded_file.name}...")
             
-            if df is not None and len(df) > 0:
-                # Convert to standardized format
-                standardized = pd.DataFrame()
-                standardized['Symbol'] = df['Symbol']
-                standardized['Date'] = df['Trade Date'].astype(str)
-                standardized['Activity'] = df['Type'].map({'BUY': 'PURCHASED', 'SELL': 'SOLD'})
-                standardized['Quantity'] = df['Quantity'].abs()
-                standardized['Price'] = df['Price (USD)'].abs()
-                standardized['Commission'] = df['Commission (USD)'].abs()
-                standardized['Source'] = f'HTML_{uploaded_file.name}'
+            # Save uploaded file temporarily
+            temp_html_path = os.path.join(temp_dir, uploaded_file.name)
+            with open(temp_html_path, 'wb') as f:
+                f.write(uploaded_file.getbuffer())
+            
+            try:
+                # Parse HTML with hybrid filtering using your existing function
+                df = parse_html_file_with_hybrid_filtering(temp_html_path, cutoff_date)
                 
-                all_data.append(standardized)
-                st.success(f"✅ {uploaded_file.name}: {len(df)} transactions found")
-            else:
-                st.warning(f"⚠️ {uploaded_file.name}: No valid transactions found")
-                
-        except Exception as e:
-            st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
+                if df is not None and len(df) > 0:
+                    # Convert to standardized format
+                    standardized = pd.DataFrame()
+                    standardized['Symbol'] = df['Symbol']
+                    standardized['Date'] = df['Trade Date'].astype(str)
+                    standardized['Activity'] = df['Type'].map({'BUY': 'PURCHASED', 'SELL': 'SOLD'})
+                    standardized['Quantity'] = df['Quantity'].abs()
+                    standardized['Price'] = df['Price (USD)'].abs()
+                    standardized['Commission'] = df['Commission (USD)'].abs()
+                    standardized['Source'] = f'HTML_{uploaded_file.name}'
+                    
+                    all_data.append(standardized)
+                    st.success(f"✅ {uploaded_file.name}: {len(df)} transactions found")
+                else:
+                    st.warning(f"⚠️ {uploaded_file.name}: No valid transactions found")
+                    
+            except Exception as e:
+                st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
+            
+            current_file += 1
+            progress_bar.progress(current_file / total_files)
+    
+    # Process CSV files
+    if csv_files:
+        status_text.text("Processing CSV files...")
+        csv_data = process_csv_files(csv_files, temp_dir, cutoff_date)
+        all_data.extend(csv_data)
         
-        progress_bar.progress((i + 1) / len(uploaded_files))
+        current_file += len(csv_files)
+        progress_bar.progress(current_file / total_files)
     
     if not all_data:
         return None, None
@@ -276,10 +695,15 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_co
     combined_df = pd.concat(all_data, ignore_index=True)
     
     # Remove duplicates
+    before_count = len(combined_df)
     combined_df = combined_df.drop_duplicates(
         subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'], 
         keep='first'
     )
+    after_count = len(combined_df)
+    
+    if before_count != after_count:
+        st.info(f"✂️ Removed {before_count - after_count} duplicate transactions")
     
     status_text.text("Creating cost basis with AUD conversion...")
     
@@ -333,7 +757,8 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_co
                     'Total_Proceeds': quantity * price_usd,
                     'Commission_Paid': commission_usd,
                     'Net_Proceeds': (quantity * price_usd) - commission_usd,
-                    'Financial_Year': financial_year
+                    'Financial_Year': financial_year,
+                    'Source': sale['Source']
                 })
             
             sales_df = pd.DataFrame(sales_data)
@@ -341,6 +766,13 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_co
             sales_df.to_csv(sales_path, index=False)
             
             status_text.text("Processing complete!")
+            
+            # Show summary
+            st.info(f"📊 Combined data summary:")
+            st.info(f"   • Total transactions: {len(combined_df)}")
+            st.info(f"   • Sales in FY {financial_year}: {len(fy_sales)}")
+            st.info(f"   • Data sources: {dict(combined_df['Source'].value_counts())}")
+            
             return cost_basis_path, sales_path
         else:
             st.warning("⚠️ No sales found in the selected financial year")
@@ -458,27 +890,76 @@ def main():
     display_exchange_rate_info(aud_converter)
     
     # File upload section
-    st.header("📁 Upload HTML Statements")
-    uploaded_files = st.file_uploader(
-        "Select Interactive Brokers HTML statement files (maximum 5 files)",
-        type=['html', 'htm'],
-        accept_multiple_files=True,
-        help="Upload your Interactive Brokers HTML trading statements"
-    )
+    st.header("📁 Upload Trading Data")
+    
+    # Create two columns for different file types
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📄 HTML Statements")
+        html_files = st.file_uploader(
+            "Interactive Brokers HTML statements",
+            type=['html', 'htm'],
+            accept_multiple_files=True,
+            help="Upload your Interactive Brokers HTML trading statements",
+            key="html_uploader"
+        )
+        
+        if html_files:
+            st.success(f"✅ {len(html_files)} HTML file(s) uploaded")
+            with st.expander("📋 HTML File Details"):
+                for file in html_files:
+                    st.text(f"• {file.name} ({file.size:,} bytes)")
+    
+    with col2:
+        st.subheader("📊 CSV Data Files")
+        csv_files = st.file_uploader(
+            "Trading CSV files",
+            type=['csv'],
+            accept_multiple_files=True,
+            help="Upload CSV files with trading data (Interactive Brokers exports, manual transaction lists, etc.)",
+            key="csv_uploader"
+        )
+        
+        if csv_files:
+            st.success(f"✅ {len(csv_files)} CSV file(s) uploaded")
+            with st.expander("📋 CSV File Details"):
+                for file in csv_files:
+                    st.text(f"• {file.name} ({file.size:,} bytes)")
+    
+    # Show supported CSV formats
+    if csv_files or st.checkbox("ℹ️ Show supported CSV formats"):
+        with st.expander("📋 Supported CSV Formats", expanded=bool(csv_files)):
+            st.markdown("""
+            **Supported CSV formats:**
+            
+            1. **Interactive Brokers CSV exports**
+               - Columns: Symbol, Trade Date, Type, Quantity, Price (USD), Commission (USD)
+            
+            2. **Manual transaction files**
+               - Columns: Date, Activity_Type, Symbol, Quantity, Price_USD, USD_Amount, AUD_Amount
+            
+            3. **Generic trading CSVs**
+               - Must include: Symbol/Ticker, Date, Type/Action, Quantity, Price
+               - Auto-detects common column patterns
+            
+            **Tips:**
+            - Upload multiple files of different formats - they'll be combined automatically
+            - HTML files are typically more accurate than CSV exports
+            - Manual CSV files are useful for older transactions or other brokers
+            """)
     
     # Validate files
-    if uploaded_files:
-        is_valid, message = validate_html_files(uploaded_files)
+    if html_files or csv_files:
+        is_valid, message = validate_uploaded_files(html_files, csv_files)
         if not is_valid:
             st.error(f"❌ {message}")
             st.stop()
         else:
-            st.success(f"✅ {len(uploaded_files)} file(s) ready for processing")
-            
-            # Show file details
-            with st.expander("📋 File Details"):
-                for file in uploaded_files:
-                    st.text(f"• {file.name} ({file.size:,} bytes)")
+            total_files = len(html_files or []) + len(csv_files or [])
+            st.success(f"✅ {total_files} file(s) ready for processing")
+    else:
+        st.info("👆 Please upload HTML statements and/or CSV files to continue")
     
     # Configuration section
     st.header("⚙️ Configuration")
@@ -496,7 +977,7 @@ def main():
         st.info(f"🇦🇺 Processing for FY {financial_year} with RBA AUD conversion")
     
     # Processing section
-    if uploaded_files and st.button("🔄 Process Files (Enhanced AUD)", type="primary", use_container_width=True):
+    if (html_files or csv_files) and st.button("🔄 Process Files (Enhanced AUD)", type="primary", use_container_width=True):
         
         # Reset session state
         st.session_state.processing_complete = False
@@ -506,10 +987,10 @@ def main():
         # Create temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
-                # Step 1: Process HTML files with enhanced AUD system
-                with st.spinner("Step 1/3: Processing HTML files with AUD conversion..."):
-                    cost_basis_path, sales_path = process_html_files_enhanced(
-                        uploaded_files, temp_dir, financial_year, aud_converter
+                # Step 1: Process HTML and CSV files with enhanced AUD system
+                with st.spinner("Step 1/3: Processing files with AUD conversion..."):
+                    cost_basis_path, sales_path = process_files_enhanced(
+                        html_files, csv_files, temp_dir, financial_year, aud_converter
                     )
                 
                 if not cost_basis_path:
@@ -642,8 +1123,16 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        "💡 **Enhanced Features:** This calculator uses your RBA historical exchange rates "
-        "for accurate AUD conversion and ATO-compliant reporting!"
+        """
+        💡 **Key Features:**
+        - Supports both HTML statements and CSV files from various sources
+        - Automatic USD to AUD conversion using RBA exchange rates (loaded seamlessly)
+        - Tax-optimized CGT calculations prioritizing long-term holdings
+        - 50% CGT discount applied for assets held >12 months
+        - Detailed Excel report ready for Australian tax lodgment
+        - Uses buy date rates for purchases and sale date rates for sales
+        - Smart duplicate detection and format standardization
+        """
     )
 
 if __name__ == "__main__":
