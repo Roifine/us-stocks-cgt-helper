@@ -103,10 +103,11 @@ def create_mock_rba_rates(temp_dir):
     
     return rates_folder
 
-# REPLACE the load_existing_csv_files function in app.py with this FIXED version:
-
 def load_existing_csv_files(financial_year):
     """Load existing CSV files from csv_folder/ and current directory"""
+    
+    import os  # Make sure os is imported
+    import glob
     
     # Look for CSV files in csv_folder/ and current directory
     all_csv_files = []
@@ -129,13 +130,10 @@ def load_existing_csv_files(financial_year):
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
     
-    # FIXED: Calculate target FY range for sales
-    target_fy_start = datetime(fy_year, 7, 1)
-    target_fy_end = datetime(fy_year + 1, 6, 30)
-    
     all_transactions = []
     
     for csv_file in transaction_files:
+        file_basename = os.path.basename(csv_file)  # Define BEFORE try block
         try:
             df = pd.read_csv(csv_file)
             
@@ -143,7 +141,7 @@ def load_existing_csv_files(financial_year):
             
             # Format 1: Manual CSV format (Date, Activity_Type, Symbol, Quantity, Price_USD)
             if all(col in df.columns for col in ['Date', 'Activity_Type', 'Symbol', 'Quantity', 'Price_USD']):
-                # Apply FIXED hybrid filtering
+                # Apply hybrid filtering
                 df_copy = df.copy()
                 df_copy['Date'] = pd.to_datetime(df_copy['Date'], format='%d.%m.%y', errors='coerce')
                 
@@ -151,19 +149,11 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Activity_Type'] == 'SOLD']
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
-                # FIXED: Keep sells BEFORE cutoff OR in target FY
+                # Filter SELL transactions by cutoff date (keep only before cutoff)
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
-                sell_in_target_fy = sell_transactions[
-                    (sell_transactions['Date'] >= target_fy_start) & 
-                    (sell_transactions['Date'] <= target_fy_end)
-                ]
                 
-                # Combine: ALL buys + sells before cutoff + sells in target FY
-                df_filtered = pd.concat([
-                    buy_transactions, 
-                    sell_before_cutoff, 
-                    sell_in_target_fy
-                ], ignore_index=True).drop_duplicates()
+                # Keep ALL BUY transactions (no filtering)
+                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -174,11 +164,11 @@ def load_existing_csv_files(financial_year):
                     standardized['Quantity'] = pd.to_numeric(df_filtered['Quantity'], errors='coerce').abs()
                     standardized['Price'] = pd.to_numeric(df_filtered['Price_USD'], errors='coerce').abs()
                     standardized['Commission'] = 30.0  # Default for manual transactions
-                    standardized['Source'] = f'CSV_{os.path.basename(csv_file)}'
+                    standardized['Source'] = f'CSV_{file_basename}'
             
             # Format 2: Parsed format (Symbol, Trade Date, Type, Quantity, Price (USD))
             elif all(col in df.columns for col in ['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)']):
-                # Apply FIXED hybrid filtering
+                # Apply hybrid filtering
                 df_copy = df.copy()
                 df_copy['Trade Date'] = pd.to_datetime(df_copy['Trade Date'])
                 
@@ -186,19 +176,11 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Type'] == 'SELL']
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
-                # FIXED: Keep sells BEFORE cutoff OR in target FY
+                # Filter SELL transactions by cutoff date (keep only before cutoff)
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
-                sell_in_target_fy = sell_transactions[
-                    (sell_transactions['Trade Date'] >= target_fy_start) & 
-                    (sell_transactions['Trade Date'] <= target_fy_end)
-                ]
                 
-                # Combine: ALL buys + sells before cutoff + sells in target FY
-                df_filtered = pd.concat([
-                    buy_transactions, 
-                    sell_before_cutoff, 
-                    sell_in_target_fy
-                ], ignore_index=True).drop_duplicates()
+                # Keep ALL BUY transactions (no filtering)
+                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -209,20 +191,20 @@ def load_existing_csv_files(financial_year):
                     standardized['Quantity'] = pd.to_numeric(df_filtered['Quantity'], errors='coerce').abs()
                     standardized['Price'] = pd.to_numeric(df_filtered['Price (USD)'], errors='coerce').abs()
                     standardized['Commission'] = pd.to_numeric(df_filtered.get('Commission (USD)', 0), errors='coerce').abs()
-                    standardized['Source'] = f'CSV_{os.path.basename(csv_file)}'
+                    standardized['Source'] = f'CSV_{file_basename}'
             
             if standardized is not None:
                 standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
                 
                 if len(standardized) > 0:
+                    # Simple debug - just show file name and count
+                    st.write(f"   📄 Loaded {len(standardized)} transactions from {file_basename}")
                     all_transactions.append(standardized)
         
         except Exception as e:
-            st.error(f"❌ Error loading {csv_file}: {e}")
+            st.error(f"❌ Error loading {file_basename}: {e}")
     
     return all_transactions
-
-# ALSO REPLACE the process_uploaded_csv_files function in app.py with this FIXED version:
 
 def process_uploaded_csv_files(uploaded_files, financial_year):
     """Process uploaded CSV files"""
@@ -230,10 +212,6 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
     # Determine cutoff date for hybrid processing
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
-    
-    # FIXED: Calculate target FY range for sales
-    target_fy_start = datetime(fy_year, 7, 1)
-    target_fy_end = datetime(fy_year + 1, 6, 30)
     
     all_transactions = []
     
@@ -251,19 +229,8 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 sell_transactions = df_copy[df_copy['Activity_Type'] == 'SOLD']
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
-                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
-                sell_in_target_fy = sell_transactions[
-                    (sell_transactions['Date'] >= target_fy_start) & 
-                    (sell_transactions['Date'] <= target_fy_end)
-                ]
-                
-                # Combine: ALL buys + sells before cutoff + sells in target FY
-                df_filtered = pd.concat([
-                    buy_transactions, 
-                    sell_before_cutoff, 
-                    sell_in_target_fy
-                ], ignore_index=True).drop_duplicates()
+                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
@@ -283,19 +250,8 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 sell_transactions = df_copy[df_copy['Type'] == 'SELL']
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
-                # FIXED: Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
-                sell_in_target_fy = sell_transactions[
-                    (sell_transactions['Trade Date'] >= target_fy_start) & 
-                    (sell_transactions['Trade Date'] <= target_fy_end)
-                ]
-                
-                # Combine: ALL buys + sells before cutoff + sells in target FY
-                df_filtered = pd.concat([
-                    buy_transactions, 
-                    sell_before_cutoff, 
-                    sell_in_target_fy
-                ], ignore_index=True).drop_duplicates()
+                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
@@ -311,6 +267,19 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
                 
                 if len(standardized) > 0:
+                    # DEBUG: Check what we're actually adding
+                    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
+                    found_in_file = []
+                    for symbol in missing_symbols:
+                        symbol_data = standardized[standardized['Symbol'] == symbol]
+                        if len(symbol_data) > 0:
+                            buy_count = len(symbol_data[symbol_data['Activity'] == 'PURCHASED'])
+                            sell_count = len(symbol_data[symbol_data['Activity'] == 'SOLD'])
+                            found_in_file.append(f"{symbol}({buy_count}B,{sell_count}S)")
+                    
+                    if found_in_file:
+                        st.write(f"   🎯 DEBUG {file_basename}: Found {found_in_file}")
+                    
                     all_transactions.append(standardized)
                     st.success(f"✅ {uploaded_file.name}: {len(standardized)} transactions loaded")
                 else:
@@ -359,6 +328,20 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
     # Combine all transactions
     combined_df = pd.concat(all_transactions, ignore_index=True)
     
+    # DEBUG: Check what symbols made it to combined_df
+    st.write(f"🔍 DEBUG: Combined data has {len(combined_df)} transactions")
+    st.write(f"🏷️ DEBUG: Symbols in combined data: {sorted(combined_df['Symbol'].unique())}")
+
+    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
+    for symbol in missing_symbols:
+        symbol_data = combined_df[combined_df['Symbol'] == symbol]
+        if len(symbol_data) > 0:
+            buy_count = len(symbol_data[symbol_data['Activity'] == 'PURCHASED'])
+            sell_count = len(symbol_data[symbol_data['Activity'] == 'SOLD'])
+            st.write(f"   ✅ {symbol}: {buy_count} BUYs, {sell_count} SELLs")
+        else:
+            st.write(f"   ❌ {symbol}: NOT FOUND in combined data")
+    
     # Remove duplicates
     combined_df = combined_df.drop_duplicates(
         subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'], 
@@ -367,12 +350,30 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
     
     st.info(f"📊 Total transactions: {len(combined_df)} (after deduplication)")
     
+    # DEBUG: Final check before FIFO processing
+    st.write(f"🔍 DEBUG: Before FIFO - checking for purchases of missing symbols:")
+    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
+    purchases_found = 0
+    for symbol in missing_symbols:
+        purchases = combined_df[(combined_df['Symbol'] == symbol) & (combined_df['Activity'] == 'PURCHASED')]
+        if len(purchases) > 0:
+            purchases_found += 1
+            total_units = purchases['Quantity'].sum()
+            st.write(f"   ✅ {symbol}: {len(purchases)} purchase records, {total_units} total units")
+            # Show first purchase as example
+            first_purchase = purchases.iloc[0]
+            st.write(f"      Example: {first_purchase['Quantity']} @ ${first_purchase['Price']} on {first_purchase['Date']}")
+        else:
+            st.write(f"   ❌ {symbol}: NO PURCHASES FOUND")
+    
+    st.write(f"📊 SUMMARY: Found purchases for {purchases_found}/{len(missing_symbols)} missing symbols")
+    
     # Apply FIFO processing with AUD conversion
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
     
     cost_basis_dict, fifo_log, conversion_errors = apply_hybrid_fifo_processing_with_aud(
-    combined_df, aud_converter, None  # Don't filter again - we already did it in CSV loading
+        combined_df, aud_converter, cutoff_date
     )
     
     if not cost_basis_dict:
@@ -501,6 +502,8 @@ def main():
     
     if not SCRIPTS_AVAILABLE:
         st.stop()
+    
+    st.markdown("---")
     
     # Configuration section
     st.header("⚙️ Configuration")
