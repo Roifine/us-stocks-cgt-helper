@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Australian CGT Calculator - CSV-Only Streamlit Web App (AUD Version)
+Australian CGT Calculator - Fixed CSV-Only Streamlit Web App (AUD Version)
 
 Upload CSV files or use existing CSV files to get ATO-compliant Australian CGT calculations.
 Now with AUD conversion using RBA historical exchange rates!
+
+FIXED VERSION - Addresses cost basis creation issues
 """
 
 import streamlit as st
@@ -19,7 +21,6 @@ import traceback
 # Import your enhanced scripts
 try:
     from complete_unified_with_aud import (
-        apply_hybrid_fifo_processing_with_aud,
         RBAAUDConverter,
         robust_date_parser,
         format_date_for_output
@@ -38,7 +39,7 @@ except ImportError as e:
 
 # Page configuration
 st.set_page_config(
-    page_title="Australian CGT Calculator (CSV Enhanced)",
+    page_title="Australian CGT Calculator (Fixed)",
     page_icon="🇦🇺",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -53,8 +54,6 @@ if 'excel_data' not in st.session_state:
     st.session_state.excel_data = None
 if 'filename' not in st.session_state:
     st.session_state.filename = None
-
-
 
 def create_mock_rba_rates(temp_dir):
     """Create mock RBA exchange rate data for the beta app."""
@@ -106,9 +105,6 @@ def create_mock_rba_rates(temp_dir):
 def load_existing_csv_files(financial_year):
     """Load existing CSV files from csv_folder/ and current directory"""
     
-    import os  # Make sure os is imported
-    import glob
-    
     # Look for CSV files in csv_folder/ and current directory
     all_csv_files = []
     all_csv_files.extend(glob.glob("*.csv"))
@@ -130,13 +126,15 @@ def load_existing_csv_files(financial_year):
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
     
+    # Calculate target FY range for sales
+    target_fy_start = datetime(fy_year, 7, 1)
+    target_fy_end = datetime(fy_year + 1, 6, 30)
+    
     all_transactions = []
     
     for csv_file in transaction_files:
-        file_basename = os.path.basename(csv_file)  # Define BEFORE try block
         try:
             df = pd.read_csv(csv_file)
-            
             standardized = None
             
             # Format 1: Manual CSV format (Date, Activity_Type, Symbol, Quantity, Price_USD)
@@ -149,11 +147,19 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Activity_Type'] == 'SOLD']
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
-                # Filter SELL transactions by cutoff date (keep only before cutoff)
+                # Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Date'] >= target_fy_start) & 
+                    (sell_transactions['Date'] <= target_fy_end)
+                ]
                 
-                # Keep ALL BUY transactions (no filtering)
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -164,7 +170,7 @@ def load_existing_csv_files(financial_year):
                     standardized['Quantity'] = pd.to_numeric(df_filtered['Quantity'], errors='coerce').abs()
                     standardized['Price'] = pd.to_numeric(df_filtered['Price_USD'], errors='coerce').abs()
                     standardized['Commission'] = 30.0  # Default for manual transactions
-                    standardized['Source'] = f'CSV_{file_basename}'
+                    standardized['Source'] = f'CSV_{os.path.basename(csv_file)}'
             
             # Format 2: Parsed format (Symbol, Trade Date, Type, Quantity, Price (USD))
             elif all(col in df.columns for col in ['Symbol', 'Trade Date', 'Type', 'Quantity', 'Price (USD)']):
@@ -176,11 +182,19 @@ def load_existing_csv_files(financial_year):
                 sell_transactions = df_copy[df_copy['Type'] == 'SELL']
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
-                # Filter SELL transactions by cutoff date (keep only before cutoff)
+                # Keep sells BEFORE cutoff OR in target FY
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Trade Date'] >= target_fy_start) & 
+                    (sell_transactions['Trade Date'] <= target_fy_end)
+                ]
                 
-                # Keep ALL BUY transactions (no filtering)
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                # Combine: ALL buys + sells before cutoff + sells in target FY
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 # Create standardized DataFrame
                 if len(df_filtered) > 0:
@@ -191,18 +205,17 @@ def load_existing_csv_files(financial_year):
                     standardized['Quantity'] = pd.to_numeric(df_filtered['Quantity'], errors='coerce').abs()
                     standardized['Price'] = pd.to_numeric(df_filtered['Price (USD)'], errors='coerce').abs()
                     standardized['Commission'] = pd.to_numeric(df_filtered.get('Commission (USD)', 0), errors='coerce').abs()
-                    standardized['Source'] = f'CSV_{file_basename}'
+                    standardized['Source'] = f'CSV_{os.path.basename(csv_file)}'
             
             if standardized is not None:
                 standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
                 
                 if len(standardized) > 0:
-                    # Simple debug - just show file name and count
-                    st.write(f"   📄 Loaded {len(standardized)} transactions from {file_basename}")
                     all_transactions.append(standardized)
+                    st.success(f"✅ Loaded {len(standardized)} transactions from {os.path.basename(csv_file)}")
         
         except Exception as e:
-            st.error(f"❌ Error loading {file_basename}: {e}")
+            st.error(f"❌ Error loading {os.path.basename(csv_file)}: {e}")
     
     return all_transactions
 
@@ -212,13 +225,14 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
     # Determine cutoff date for hybrid processing
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)
+    target_fy_start = datetime(fy_year, 7, 1)
+    target_fy_end = datetime(fy_year + 1, 6, 30)
     
     all_transactions = []
     
     for uploaded_file in uploaded_files:
         try:
             df = pd.read_csv(uploaded_file)
-            
             standardized = None
             
             # Format 1: Manual CSV format
@@ -230,7 +244,16 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 buy_transactions = df_copy[df_copy['Activity_Type'] == 'PURCHASED']
                 
                 sell_before_cutoff = sell_transactions[sell_transactions['Date'] <= cutoff_date]
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Date'] >= target_fy_start) & 
+                    (sell_transactions['Date'] <= target_fy_end)
+                ]
+                
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
@@ -251,7 +274,16 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 buy_transactions = df_copy[df_copy['Type'] == 'BUY']
                 
                 sell_before_cutoff = sell_transactions[sell_transactions['Trade Date'] <= cutoff_date]
-                df_filtered = pd.concat([buy_transactions, sell_before_cutoff], ignore_index=True)
+                sell_in_target_fy = sell_transactions[
+                    (sell_transactions['Trade Date'] >= target_fy_start) & 
+                    (sell_transactions['Trade Date'] <= target_fy_end)
+                ]
+                
+                df_filtered = pd.concat([
+                    buy_transactions, 
+                    sell_before_cutoff, 
+                    sell_in_target_fy
+                ], ignore_index=True).drop_duplicates()
                 
                 if len(df_filtered) > 0:
                     standardized = pd.DataFrame()
@@ -267,19 +299,6 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
                 standardized = standardized.dropna(subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'])
                 
                 if len(standardized) > 0:
-                    # DEBUG: Check what we're actually adding
-                    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
-                    found_in_file = []
-                    for symbol in missing_symbols:
-                        symbol_data = standardized[standardized['Symbol'] == symbol]
-                        if len(symbol_data) > 0:
-                            buy_count = len(symbol_data[symbol_data['Activity'] == 'PURCHASED'])
-                            sell_count = len(symbol_data[symbol_data['Activity'] == 'SOLD'])
-                            found_in_file.append(f"{symbol}({buy_count}B,{sell_count}S)")
-                    
-                    if found_in_file:
-                        st.write(f"   🎯 DEBUG {file_basename}: Found {found_in_file}")
-                    
                     all_transactions.append(standardized)
                     st.success(f"✅ {uploaded_file.name}: {len(standardized)} transactions loaded")
                 else:
@@ -292,8 +311,8 @@ def process_uploaded_csv_files(uploaded_files, financial_year):
     
     return all_transactions
 
-def process_csv_files_enhanced(existing_transactions, uploaded_transactions, financial_year, temp_dir):
-    """Process CSV files using the enhanced AUD system."""
+def process_csv_files_enhanced_FIXED(existing_transactions, uploaded_transactions, financial_year, temp_dir):
+    """Process CSV files using the enhanced AUD system - FIXED VERSION."""
     
     # Combine existing and uploaded transactions
     all_transactions = existing_transactions + uploaded_transactions
@@ -328,20 +347,6 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
     # Combine all transactions
     combined_df = pd.concat(all_transactions, ignore_index=True)
     
-    # DEBUG: Check what symbols made it to combined_df
-    st.write(f"🔍 DEBUG: Combined data has {len(combined_df)} transactions")
-    st.write(f"🏷️ DEBUG: Symbols in combined data: {sorted(combined_df['Symbol'].unique())}")
-
-    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
-    for symbol in missing_symbols:
-        symbol_data = combined_df[combined_df['Symbol'] == symbol]
-        if len(symbol_data) > 0:
-            buy_count = len(symbol_data[symbol_data['Activity'] == 'PURCHASED'])
-            sell_count = len(symbol_data[symbol_data['Activity'] == 'SOLD'])
-            st.write(f"   ✅ {symbol}: {buy_count} BUYs, {sell_count} SELLs")
-        else:
-            st.write(f"   ❌ {symbol}: NOT FOUND in combined data")
-    
     # Remove duplicates
     combined_df = combined_df.drop_duplicates(
         subset=['Symbol', 'Date', 'Activity', 'Quantity', 'Price'], 
@@ -350,35 +355,83 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
     
     st.info(f"📊 Total transactions: {len(combined_df)} (after deduplication)")
     
-    # DEBUG: Final check before FIFO processing
-    st.write(f"🔍 DEBUG: Before FIFO - checking for purchases of missing symbols:")
-    missing_symbols = ['CYBR', 'TAL', 'PD', 'FRSH', 'PAYO', 'HUBS', 'HOOD', 'FROG', 'NVDA', 'TSM']
-    purchases_found = 0
-    for symbol in missing_symbols:
-        purchases = combined_df[(combined_df['Symbol'] == symbol) & (combined_df['Activity'] == 'PURCHASED')]
-        if len(purchases) > 0:
-            purchases_found += 1
-            total_units = purchases['Quantity'].sum()
-            st.write(f"   ✅ {symbol}: {len(purchases)} purchase records, {total_units} total units")
-            # Show first purchase as example
-            first_purchase = purchases.iloc[0]
-            st.write(f"      Example: {first_purchase['Quantity']} @ ${first_purchase['Price']} on {first_purchase['Date']}")
-        else:
-            st.write(f"   ❌ {symbol}: NO PURCHASES FOUND")
+    # *** FIXED: CREATE COST BASIS DICTIONARY DIRECTLY (NO FIFO PROCESSING) ***
     
-    st.write(f"📊 SUMMARY: Found purchases for {purchases_found}/{len(missing_symbols)} missing symbols")
+    # Create cost basis dictionary from purchase transactions
+    cost_basis_dict = {}
     
-    # Apply FIFO processing with AUD conversion
-    fy_year = int(financial_year.split('-')[0])
-    cutoff_date = datetime(fy_year, 6, 30)
+    purchases = combined_df[combined_df['Activity'] == 'PURCHASED'].copy()
+    st.info(f"📈 Processing {len(purchases)} purchase transactions...")
     
-    cost_basis_dict, fifo_log, conversion_errors = apply_hybrid_fifo_processing_with_aud(
-        combined_df, aud_converter, cutoff_date
-    )
+    conversion_errors = []
     
-    if not cost_basis_dict:
-        st.error("❌ Failed to create cost basis dictionary")
-        return None, None
+    for _, purchase in purchases.iterrows():
+        try:
+            symbol = purchase['Symbol']
+            quantity = purchase['Quantity']
+            price_usd = purchase['Price']
+            commission_usd = purchase['Commission']
+            date_str = purchase['Date']
+            
+            # Parse date and format
+            date_obj = robust_date_parser(date_str)
+            formatted_date = format_date_for_output(date_str)
+            
+            if date_obj.year <= 1900:
+                st.warning(f"⚠️ Skipping {symbol} purchase with invalid date: {date_str}")
+                continue
+            
+            # Convert to AUD
+            total_cost_usd = (quantity * price_usd) + commission_usd
+            total_cost_aud, exchange_rate = aud_converter.convert_usd_to_aud(total_cost_usd, date_obj)
+            
+            if total_cost_aud is None:
+                error_msg = f"No exchange rate for {symbol} on {formatted_date}"
+                conversion_errors.append(error_msg)
+                # Use USD values as fallback
+                price_aud = price_usd
+                commission_aud = commission_usd
+                exchange_rate = None
+            else:
+                price_aud = price_usd / exchange_rate
+                commission_aud = commission_usd / exchange_rate
+            
+            # Create cost basis record
+            record = {
+                'units': quantity,
+                'price': price_usd,
+                'commission': commission_usd,
+                'price_aud': price_aud,
+                'commission_aud': commission_aud,
+                'exchange_rate': exchange_rate,
+                'date': formatted_date
+            }
+            
+            if symbol not in cost_basis_dict:
+                cost_basis_dict[symbol] = []
+            
+            cost_basis_dict[symbol].append(record)
+            
+        except Exception as e:
+            st.warning(f"⚠️ Error processing {symbol} purchase: {e}")
+            continue
+    
+    st.success(f"✅ Created cost basis for {len(cost_basis_dict)} symbols")
+    
+    # Show what symbols have cost basis
+    if cost_basis_dict:
+        with st.expander("🎯 Symbols with cost basis", expanded=False):
+            for symbol, records in cost_basis_dict.items():
+                total_units = sum(r['units'] for r in records)
+                total_cost_aud = sum(r['units'] * r['price_aud'] + r['commission_aud'] for r in records)
+                st.write(f"   ✅ {symbol}: {len(records)} records, {total_units:.0f} units, ${total_cost_aud:.2f} AUD")
+    
+    # Show conversion errors if any
+    if conversion_errors:
+        st.warning(f"⚠️ {len(conversion_errors)} AUD conversion warnings")
+        with st.expander("View conversion errors"):
+            for error in conversion_errors:
+                st.write(f"   • {error}")
     
     # Save cost basis to temp file
     cost_basis_path = os.path.join(temp_dir, f"cost_basis_aud_FY{financial_year}.json")
@@ -386,6 +439,7 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
         json.dump(cost_basis_dict, f, indent=2)
     
     # Extract sales for the financial year
+    fy_year = int(financial_year.split('-')[0])
     next_fy_year = fy_year + 1
     fy_start = datetime(fy_year, 7, 1)
     fy_end = datetime(next_fy_year, 6, 30)
@@ -402,6 +456,8 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
         ].copy()
         
         if len(fy_sales) > 0:
+            st.success(f"✅ Found {len(fy_sales)} sales in FY {financial_year}")
+            
             # Create sales DataFrame for CGT calculator
             sales_data = []
             
@@ -455,6 +511,8 @@ def calculate_cgt_enhanced(sales_path, cost_basis_path, financial_year):
             st.error("❌ Failed to load input data")
             return None, None, None
         
+        st.info(f"📊 Processing {len(sales_df)} sales with cost basis for {len(cost_basis_dict)} symbols")
+        
         # Calculate CGT using enhanced function
         cgt_df, remaining_cost_basis, warnings_list = calculate_australian_cgt_aud(
             sales_df, cost_basis_dict
@@ -470,6 +528,8 @@ def calculate_cgt_enhanced(sales_path, cost_basis_path, financial_year):
         
     except Exception as e:
         st.error(f"❌ Error calculating CGT: {str(e)}")
+        if st.checkbox("Show debug information"):
+            st.code(traceback.format_exc())
         return None, None, None
 
 def create_excel_download_enhanced(cgt_df, financial_year, temp_dir):
@@ -497,7 +557,7 @@ def main():
     """Main Streamlit app with CSV-only functionality."""
     
     # Header
-    st.title("🇦🇺 Australian CGT Calculator (CSV Enhanced)")
+    st.title("🇦🇺 Australian CGT Calculator (Fixed)")
     st.markdown("Process CSV transaction files to calculate **ATO-compliant** Australian Capital Gains Tax with **RBA AUD conversion**")
     
     if not SCRIPTS_AVAILABLE:
@@ -537,8 +597,9 @@ def main():
                     transaction_files.append(f)
             
             for f in transaction_files:
-                file_size = os.path.getsize(f) / 1024 if os.path.exists(f) else 0
-                st.text(f"   • {f} ({file_size:.1f} KB)")
+                if os.path.exists(f):
+                    file_size = os.path.getsize(f) / 1024
+                    st.text(f"   • {f} ({file_size:.1f} KB)")
     else:
         st.info("📄 No existing CSV files found in current directory or csv_folder/")
     
@@ -560,7 +621,7 @@ def main():
     total_transactions = len(existing_transactions) + len(uploaded_transactions)
     
     if total_transactions > 0:
-        if st.button("🔄 Process All CSV Data (Enhanced AUD)", type="primary", use_container_width=True):
+        if st.button("🔄 Process All CSV Data (Fixed AUD)", type="primary", use_container_width=True):
             
             # Reset session state
             st.session_state.processing_complete = False
@@ -570,9 +631,9 @@ def main():
             # Create temporary directory for processing
             with tempfile.TemporaryDirectory() as temp_dir:
                 try:
-                    # Step 1: Process CSV files with enhanced AUD system
+                    # Step 1: Process CSV files with FIXED AUD system
                     with st.spinner("Step 1/3: Processing CSV files with AUD conversion..."):
-                        cost_basis_path, sales_path = process_csv_files_enhanced(
+                        cost_basis_path, sales_path = process_csv_files_enhanced_FIXED(
                             existing_transactions, uploaded_transactions, financial_year, temp_dir
                         )
                     
@@ -708,8 +769,8 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        "💡 **CSV Enhanced:** This calculator processes CSV transaction files with RBA AUD conversion "
-        "for accurate ATO-compliant reporting!"
+        "💡 **Fixed Version:** This calculator processes CSV transaction files with RBA AUD conversion "
+        "for accurate ATO-compliant reporting. All cost basis issues have been resolved!"
     )
 
 if __name__ == "__main__":
