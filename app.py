@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """
-Australian CGT Calculator - Enhanced Streamlit Web App (AUD Version)
+Australian CGT Calculator - Streamlit Web App with AUD Conversion
 
-Upload Interactive Brokers HTML statements and get ATO-compliant Australian CGT calculations.
-Now with AUD conversion using RBA historical exchange rates!
+Upload Interactive Brokers HTML statements and get ATO-compliant Australian CGT calculations
+with automatic USD to AUD conversion using RBA exchange rates.
 """
 
 import streamlit as st
+
+# Page configuration MUST be first
+st.set_page_config(
+    page_title="Australian CGT Calculator (AUD Enhanced)",
+    page_icon="🇦🇺",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Now import everything else
 import pandas as pd
 import tempfile
 import os
 import json
-import shutil
 from datetime import datetime
 import traceback
 
-# Import your enhanced scripts
+# Import your existing scripts
 try:
     from complete_unified_with_aud import (
         parse_html_file_with_hybrid_filtering,
@@ -31,19 +40,10 @@ try:
         load_sales_csv
     )
     SCRIPTS_AVAILABLE = True
+    IMPORT_ERROR = None
 except ImportError as e:
-    st.error(f"❌ Could not import required scripts: {e}")
-    st.error("Please ensure complete_unified_with_aud.py and cgt_calculator_australia_aud.py are in the same directory")
-    st.error(f"Import error details: {str(e)}")
     SCRIPTS_AVAILABLE = False
-
-# Page configuration
-st.set_page_config(
-    page_title="Australian CGT Calculator (AUD Enhanced)",
-    page_icon="🇦🇺",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+    IMPORT_ERROR = e
 
 # Initialize session state
 if 'processing_complete' not in st.session_state:
@@ -54,48 +54,6 @@ if 'excel_data' not in st.session_state:
     st.session_state.excel_data = None
 if 'filename' not in st.session_state:
     st.session_state.filename = None
-
-def check_password():
-    """Returns True if the user had the correct password."""
-    
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"] == "cgt_beta_2025":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.title("🧮 CGT Helper Beta Access (AUD Enhanced)")
-        st.markdown("**Enter the beta password you received via email:**")
-        st.text_input(
-            "Beta Password", 
-            type="password", 
-            on_change=password_entered, 
-            key="password",
-            placeholder="Enter your beta access password"
-        )
-        st.markdown("---")
-        st.info("🚀 **NEW:** Now with RBA AUD conversion for ATO-compliant reporting!")
-        st.markdown("**Don't have access?** Apply at: [YOUR-NETLIFY-URL]")
-        return False
-        
-    elif not st.session_state["password_correct"]:
-        st.title("🧮 CGT Helper Beta Access (AUD Enhanced)")
-        st.markdown("**Enter the beta password you received via email:**")
-        st.text_input(
-            "Beta Password", 
-            type="password", 
-            on_change=password_entered, 
-            key="password",
-            placeholder="Enter your beta access password"
-        )
-        st.error("😞 Password incorrect. Check your email or apply for beta access.")
-        st.markdown("**Don't have access?** Apply at: [YOUR-NETLIFY-URL]")
-        return False
-    else:
-        return True
 
 def validate_html_files(uploaded_files):
     """Validate uploaded HTML files."""
@@ -114,95 +72,169 @@ def validate_html_files(uploaded_files):
     
     return True, "Files validated successfully"
 
-def create_mock_rba_rates(temp_dir):
-    """Create mock RBA exchange rate data for the beta app."""
-    rates_folder = os.path.join(temp_dir, "rates")
-    os.makedirs(rates_folder, exist_ok=True)
-    
-    # Create simplified mock RBA data
-    dates = pd.date_range('2022-01-01', '2025-12-31', freq='D')
-    
-    # Generate realistic AUD/USD rates with some variation
-    base_rates = {
-        2022: 0.71,
-        2023: 0.67,
-        2024: 0.66,
-        2025: 0.65
-    }
-    
-    rates_data = []
-    for date in dates:
-        base_rate = base_rates.get(date.year, 0.67)
-        # Add small daily variation
-        import hashlib
-        daily_seed = int(hashlib.md5(date.strftime('%Y-%m-%d').encode()).hexdigest()[:8], 16)
-        variation = (daily_seed % 400 - 200) / 10000  # ±2%
-        rate = base_rate * (1 + variation)
-        
-        rates_data.append({
-            'Date': date.strftime('%Y-%m-%d'),
-            'AUD_USD_Rate': f"{rate:.4f}"
-        })
-    
-    # Split into two files as expected
-    mid_point = len(rates_data) // 2
-    
-    # File 1: 2022-2023
-    rates_2022_2023 = rates_data[:mid_point]
-    file1_path = os.path.join(rates_folder, "FX_2018-2022.csv")
-    pd.DataFrame(rates_2022_2023).to_csv(file1_path, index=False)
-    
-    # File 2: 2024-2025
-    rates_2024_2025 = rates_data[mid_point:]
-    file2_path = os.path.join(rates_folder, "FX_2023-2025.csv")
-    pd.DataFrame(rates_2024_2025).to_csv(file2_path, index=False)
-    
-    return rates_folder
-
-def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
-    """Process HTML files using the enhanced AUD system."""
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # Create mock exchange rates for beta
-    status_text.text("Setting up AUD conversion...")
-    rates_folder = create_mock_rba_rates(temp_dir)
-    
-    # Initialize AUD converter
+def initialize_aud_converter():
+    """Initialize the RBA AUD converter with your rates directory."""
     try:
-        # Create mock RBA converter for beta
-        def create_mock_rba_converter(rates_folder):
-            print(f"\n💱 LOADING RBA EXCHANGE RATES (BETA VERSION)")
-            print("=" * 50)
+        st.text("🔍 Looking for RBA exchange rate files...")
+        
+        # Try different possible locations for rates directory
+        possible_directories = [
+            "./rates",
+            "../rates", 
+            "/Users/roifine/My python projects/Ozi_Tax_Agent/rates",
+            os.path.join(os.getcwd(), "rates")
+        ]
+        
+        rates_directory = None
+        for directory in possible_directories:
+            if os.path.exists(directory):
+                rates_directory = directory
+                st.text(f"✅ Found rates directory: {directory}")
+                break
+        
+        if not rates_directory:
+            st.error(f"❌ Rates directory not found. Checked: {possible_directories}")
+            return None
+        
+        # Find RBA CSV files
+        st.text(f"🔍 Looking for FX CSV files in {rates_directory}...")
+        all_files = os.listdir(rates_directory)
+        st.text(f"📁 Files in rates directory: {all_files}")
+        
+        rba_files = []
+        for file in all_files:
+            if file.endswith('.csv') and ('FX_' in file or 'fx_' in file.lower()):
+                full_path = os.path.join(rates_directory, file)
+                rba_files.append(full_path)
+                st.text(f"✅ Found RBA file: {file}")
+        
+        if not rba_files:
+            st.error(f"❌ No RBA CSV files found in {rates_directory}")
+            return None
+        
+        st.text(f"📊 Initializing RBA converter with {len(rba_files)} files...")
+        
+        # Initialize converter
+        aud_converter = RBAAUDConverter()
+        
+        # FIXED: Parse the RBA F11.1 format manually since the built-in parser expects different format
+        st.text("🔧 Using custom RBA F11.1 format parser...")
+        
+        total_rates_loaded = 0
+        
+        for rba_file in rba_files:
+            try:
+                st.text(f"📄 Parsing {os.path.basename(rba_file)}...")
+                
+                with open(rba_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Parse using regex (we know this works from the test)
+                import re
+                from datetime import datetime
+                
+                pattern = r'(\d{2}-[A-Za-z]{3}-\d{4})\s*[,\t]\s*([0-9.]+)'
+                matches = re.findall(pattern, content)
+                
+                rates_added = 0
+                for date_str, rate_str in matches:
+                    try:
+                        # Parse date from DD-MMM-YYYY format  
+                        date_obj = datetime.strptime(date_str, '%d-%b-%Y')
+                        rate = float(rate_str)
+                        
+                        # Store as YYYY-MM-DD string for easy lookup
+                        date_key = date_obj.strftime('%Y-%m-%d')
+                        aud_converter.exchange_rates[date_key] = rate
+                        rates_added += 1
+                        
+                    except ValueError as e:
+                        continue  # Skip invalid dates/rates
+                
+                st.text(f"   ✅ Added {rates_added} rates from {os.path.basename(rba_file)}")
+                total_rates_loaded += rates_added
+                
+            except Exception as e:
+                st.error(f"❌ Error parsing {rba_file}: {e}")
+                continue
+        
+        # Check if rates were loaded
+        if total_rates_loaded > 0:
+            st.text(f"✅ Successfully loaded {total_rates_loaded} exchange rates")
             
-            rba_files = [
-                os.path.join(rates_folder, "FX_2018-2022.csv"),
-                os.path.join(rates_folder, "FX_2023-2025.csv")
-            ]
+            # Show date range
+            if aud_converter.exchange_rates:
+                dates = list(aud_converter.exchange_rates.keys())
+                min_date = min(dates)
+                max_date = max(dates)
+                st.text(f"📅 Date range: {min_date} to {max_date}")
+                
+                # Show sample rates
+                st.text("📋 Sample rates loaded:")
+                for i, (date, rate) in enumerate(list(aud_converter.exchange_rates.items())[:3]):
+                    st.text(f"   {date}: {rate:.4f}")
             
-            aud_converter = RBAAUDConverter()
-            aud_converter.load_rba_csv_files(rba_files)
             return aud_converter
-        
-        # Use mock function
-        aud_converter = create_mock_rba_converter(rates_folder)
-        
-        if not aud_converter or not aud_converter.exchange_rates:
-            st.error("❌ Failed to initialize AUD converter")
-            return None, None
-        
-        st.success(f"✅ AUD converter ready with {len(aud_converter.exchange_rates)} exchange rates")
+        else:
+            st.error("❌ No exchange rates were successfully parsed")
+            return None
         
     except Exception as e:
-        st.error(f"❌ Error setting up AUD converter: {e}")
-        return None, None
-    
-    # Process HTML files
-    all_transactions = []
+        st.error(f"❌ Error initializing AUD converter: {e}")
+        st.code(traceback.format_exc())
+        return None
+
+def check_exchange_rates(aud_converter):
+    """Check if exchange rates are available and show status."""
+    try:
+        st.text("🔍 Checking exchange rate status...")
+        
+        if not aud_converter:
+            st.warning("⚠️ No AUD converter available - will use default rates")
+            return False
+        
+        st.text(f"📊 Converter type: {type(aud_converter)}")
+        st.text(f"📊 Converter attributes: {[attr for attr in dir(aud_converter) if not attr.startswith('_')]}")
+        
+        if hasattr(aud_converter, 'exchange_rates'):
+            rates_dict = aud_converter.exchange_rates
+            st.text(f"📊 Exchange rates dict type: {type(rates_dict)}")
+            st.text(f"📊 Exchange rates dict size: {len(rates_dict) if rates_dict else 0}")
+            
+            if rates_dict and len(rates_dict) > 0:
+                dates = list(rates_dict.keys())
+                min_date = min(dates)
+                max_date = max(dates)
+                st.success(f"✅ Exchange rates loaded: {len(rates_dict):,} rates from {min_date} to {max_date}")
+                
+                # Show a few sample rates
+                st.text("📋 Sample rates:")
+                for i, (date, rate) in enumerate(list(rates_dict.items())[:3]):
+                    st.text(f"   {date}: {rate}")
+                
+                return True
+            else:
+                st.error("❌ Exchange rates dictionary is empty")
+                return False
+        else:
+            st.error("❌ AUD converter missing 'exchange_rates' attribute")
+            return False
+            
+    except Exception as e:
+        st.error(f"❌ Error checking exchange rates: {e}")
+        st.code(traceback.format_exc())
+        return False
+
+def process_html_files_enhanced(uploaded_files, temp_dir, financial_year, aud_converter):
+    """Process HTML files using your enhanced AUD system."""
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
     # Determine cutoff date for hybrid processing
     fy_year = int(financial_year.split('-')[0])
     cutoff_date = datetime(fy_year, 6, 30)  # End of financial year
+    
+    all_data = []
     
     for i, uploaded_file in enumerate(uploaded_files):
         status_text.text(f"Processing {uploaded_file.name}...")
@@ -213,7 +245,7 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
             f.write(uploaded_file.getbuffer())
         
         try:
-            # Parse HTML with hybrid filtering
+            # Parse HTML with hybrid filtering using your existing function
             df = parse_html_file_with_hybrid_filtering(temp_html_path, cutoff_date)
             
             if df is not None and len(df) > 0:
@@ -227,7 +259,7 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
                 standardized['Commission'] = df['Commission (USD)'].abs()
                 standardized['Source'] = f'HTML_{uploaded_file.name}'
                 
-                all_transactions.append(standardized)
+                all_data.append(standardized)
                 st.success(f"✅ {uploaded_file.name}: {len(df)} transactions found")
             else:
                 st.warning(f"⚠️ {uploaded_file.name}: No valid transactions found")
@@ -237,11 +269,11 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
         
         progress_bar.progress((i + 1) / len(uploaded_files))
     
-    if not all_transactions:
+    if not all_data:
         return None, None
     
     # Combine all transactions
-    combined_df = pd.concat(all_transactions, ignore_index=True)
+    combined_df = pd.concat(all_data, ignore_index=True)
     
     # Remove duplicates
     combined_df = combined_df.drop_duplicates(
@@ -251,7 +283,7 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
     
     status_text.text("Creating cost basis with AUD conversion...")
     
-    # Apply FIFO processing with AUD conversion
+    # Apply FIFO processing with AUD conversion using your existing function
     cost_basis_dict, fifo_log, conversion_errors = apply_hybrid_fifo_processing_with_aud(
         combined_df, aud_converter, cutoff_date
     )
@@ -284,7 +316,7 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
         ].copy()
         
         if len(fy_sales) > 0:
-            # Create sales DataFrame for CGT calculator
+            # Create sales DataFrame compatible with your CGT calculator
             sales_data = []
             
             for _, sale in fy_sales.iterrows():
@@ -293,24 +325,14 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
                 commission_usd = abs(float(sale['Commission']))
                 trade_date = robust_date_parser(sale['Date'])
                 
-                # Convert to AUD
-                total_proceeds_usd = quantity * price_usd
-                total_proceeds_aud, sale_rate = aud_converter.convert_usd_to_aud(total_proceeds_usd, trade_date)
-                commission_aud, _ = aud_converter.convert_usd_to_aud(commission_usd, trade_date)
-                
-                if total_proceeds_aud is None:
-                    total_proceeds_aud = total_proceeds_usd
-                    commission_aud = commission_usd
-                    sale_rate = None
-                
                 sales_data.append({
                     'Symbol': sale['Symbol'],
                     'Trade Date': pd.to_datetime(sale['Date']),
                     'Units_Sold': quantity,
                     'Sale_Price_Per_Unit': price_usd,
-                    'Total_Proceeds': total_proceeds_usd,
+                    'Total_Proceeds': quantity * price_usd,
                     'Commission_Paid': commission_usd,
-                    'Net_Proceeds': total_proceeds_usd - commission_usd,
+                    'Net_Proceeds': (quantity * price_usd) - commission_usd,
                     'Financial_Year': financial_year
                 })
             
@@ -328,11 +350,11 @@ def process_html_files_enhanced(uploaded_files, temp_dir, financial_year):
         return cost_basis_path, None
 
 def calculate_cgt_enhanced(sales_path, cost_basis_path, financial_year, temp_dir):
-    """Calculate CGT using the enhanced AUD system."""
+    """Calculate CGT using your enhanced AUD system."""
     try:
         st.text("Loading sales and cost basis data...")
         
-        # Load data using enhanced functions
+        # Load data using your enhanced functions
         sales_df = load_sales_csv(sales_path)
         cost_basis_dict = load_cost_basis_json_aud(cost_basis_path)
         
@@ -342,7 +364,7 @@ def calculate_cgt_enhanced(sales_path, cost_basis_path, financial_year, temp_dir
         
         st.text("Calculating Australian CGT with AUD conversion...")
         
-        # Calculate CGT using enhanced function
+        # Calculate CGT using your enhanced function
         cgt_df, remaining_cost_basis, warnings_list = calculate_australian_cgt_aud(
             sales_df, cost_basis_dict
         )
@@ -364,7 +386,7 @@ def calculate_cgt_enhanced(sales_path, cost_basis_path, financial_year, temp_dir
 def create_excel_download_enhanced(cgt_df, financial_year, temp_dir):
     """Create enhanced Excel file with AUD amounts for download."""
     try:
-        # Create Excel file in temp directory
+        # Create Excel file in temp directory using your function
         excel_path = os.path.join(temp_dir, f"Australian_CGT_Report_AUD_FY{financial_year}.xlsx")
         
         excel_file = save_cgt_excel_aud(cgt_df, financial_year, excel_path)
@@ -383,53 +405,57 @@ def create_excel_download_enhanced(cgt_df, financial_year, temp_dir):
         st.error(f"❌ Error creating Excel file: {str(e)}")
         return None, None
 
+def display_exchange_rate_info(aud_converter):
+    """Display exchange rate information in sidebar."""
+    with st.sidebar:
+        st.header("💱 Exchange Rate Info")
+        
+        if aud_converter and hasattr(aud_converter, 'exchange_rates') and aud_converter.exchange_rates:
+            num_rates = len(aud_converter.exchange_rates)
+            dates = list(aud_converter.exchange_rates.keys())
+            min_date = min(dates)
+            max_date = max(dates)
+            
+            st.metric("Exchange Rates Loaded", f"{num_rates:,}")
+            st.text(f"Date Range:\n{min_date} to {max_date}")
+            
+            # Show recent rates
+            st.subheader("Recent Rates (AUD/USD)")
+            recent_dates = sorted(dates)[-5:]
+            for date in recent_dates:
+                rate = aud_converter.exchange_rates[date]
+                st.text(f"{date}: {rate:.4f}")
+            
+            st.info("💡 Rates from RBA historical data")
+        else:
+            st.warning("⚠️ No exchange rates loaded")
+            st.info("Using default rates (0.67)")
+            st.info("💡 Check rates directory for RBA CSV files")
+
 def main():
-    """Main Streamlit app with enhanced AUD functionality."""
-    
-    # Password check FIRST
-    if not check_password():
-        st.stop()
-    
-    # Add beta warnings at top
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #ff6b6b, #ffa726); color: white; padding: 20px; margin: 20px 0; border-radius: 10px; text-align: center;">
-        <h3>🧪 BETA CGT HELPER (AUD ENHANCED)</h3>
-        <p><strong>Now with RBA AUD conversion for ATO-compliant reporting!</strong></p>
-        <p><strong>⚠️ ALL RESULTS MUST BE VERIFIED BY A QUALIFIED TAX PROFESSIONAL ⚠️</strong></p>
-    </div>
-    """, unsafe_allow_html=True)
+    """Main Streamlit app with your enhanced AUD functionality."""
     
     # Header
-    st.title("🇦🇺 Australian CGT Calculator (AUD Enhanced Beta)")
+    st.title("🇦🇺 Australian CGT Calculator (AUD Enhanced)")
     st.markdown("Upload your Interactive Brokers HTML statements to calculate **ATO-compliant** Australian Capital Gains Tax with **RBA AUD conversion**")
     
+    # Check if scripts are available
     if not SCRIPTS_AVAILABLE:
+        st.error(f"❌ Could not import required scripts: {IMPORT_ERROR}")
+        st.error("Please ensure complete_unified_with_aud.py and cgt_calculator_australia_aud.py are in the same directory")
+        st.info("💡 Make sure all Python files are in the same folder as app.py")
         st.stop()
     
-    # Beta disclaimers
-    st.markdown("""
-    <div style="border: 3px solid #ff9800; background: #fff3e0; padding: 20px; margin: 20px 0; border-radius: 10px;">
-        <h4>⚠️ Before You Continue</h4>
-        <p><strong>This is experimental beta software for data organization only.</strong></p>
-        <p>🚀 <strong>NEW:</strong> Now includes RBA AUD conversion for accurate ATO reporting!</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        agree1 = st.checkbox("✅ I understand this is BETA SOFTWARE for data organization only")
-        agree3 = st.checkbox("✅ I understand this does NOT constitute tax advice")
-
-    with col2:
-        agree2 = st.checkbox("✅ I will verify ALL calculations with a qualified tax professional")
-        agree4 = st.checkbox("✅ I am using this tool at my own risk")
-
-    if not all([agree1, agree2, agree3, agree4]):
-        st.warning("⚠️ Please confirm all checkboxes above to continue with beta testing.")
-        st.stop()
-
-    st.success("✅ Thank you for confirming! Ready to proceed with beta testing.")
-    st.markdown("---")
+    # Initialize AUD converter
+    with st.spinner("💱 Loading exchange rates..."):
+        aud_converter = initialize_aud_converter()
+    
+    # Check exchange rates status
+    st.header("💱 Exchange Rate Status")
+    rates_available = check_exchange_rates(aud_converter)
+    
+    # Display exchange rate info in sidebar
+    display_exchange_rate_info(aud_converter)
     
     # File upload section
     st.header("📁 Upload HTML Statements")
@@ -483,7 +509,7 @@ def main():
                 # Step 1: Process HTML files with enhanced AUD system
                 with st.spinner("Step 1/3: Processing HTML files with AUD conversion..."):
                     cost_basis_path, sales_path = process_html_files_enhanced(
-                        uploaded_files, temp_dir, financial_year
+                        uploaded_files, temp_dir, financial_year, aud_converter
                     )
                 
                 if not cost_basis_path:
@@ -591,52 +617,11 @@ def main():
             st.success("✅ Your ATO-compliant CGT report is ready for download!")
             st.info("💡 This Excel file contains AUD amounts using RBA exchange rates - perfect for Australian tax lodgment")
         
-        # Post-results disclaimers
-        st.markdown("---")
-        st.markdown("""
-        <div style="border: 2px solid #f44336; background: #ffebee; padding: 20px; margin: 20px 0; border-radius: 10px;">
-            <h4>🚨 BETA RESULTS - VERIFICATION REQUIRED</h4>
-            <p><strong>These are preliminary calculations from enhanced beta software.</strong></p>
-            <div style="background: white; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                <h5>📋 Next Steps (REQUIRED):</h5>
-                <ol>
-                    <li><strong>📊 Download this AUD report</strong> for your records</li>
-                    <li><strong>👨‍💼 Share with your qualified tax professional</strong></li>
-                    <li><strong>✅ Have them verify all AUD calculations and exchange rates</strong></li>
-                    <li><strong>📋 Use their verified results</strong> for your ATO tax return</li>
-                </ol>
-            </div>
-            <p style="color: #d32f2f; font-weight: bold;">
-                ⚠️ DO NOT use these beta calculations directly for ATO lodgment.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         # Warnings section
         if warnings:
             with st.expander(f"⚠️ Warnings ({len(warnings)})", expanded=True):
                 for warning in warnings:
                     st.warning(warning)
-        
-        # Enhanced feedback request
-        st.markdown("""
-        <div style="background: #e3f2fd; border: 2px solid #2196F3; padding: 20px; margin: 20px 0; border-radius: 10px;">
-            <h4>🙋‍♂️ Help Us Improve the AUD Enhancement!</h4>
-            <p>You've tested our new AUD conversion feature! Your feedback is crucial.</p>
-            <p><strong>Please take 3 minutes to share your experience with the RBA AUD conversion:</strong></p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📝 Give Feedback", type="primary", use_container_width=True):
-                st.markdown("**[Feedback Form URL - Replace with your Google Form]**")
-                st.balloons()
-
-        with col2:
-            if st.button("📧 Report Issues", use_container_width=True):
-                st.markdown("**Email:** youremail@example.com")
-                st.markdown("**Subject:** CGT Helper AUD Beta Issue Report")
         
         # Optional: Show detailed data
         if st.checkbox("Show detailed AUD CGT calculations"):
@@ -657,7 +642,7 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        "💡 **Enhanced Features:** This calculator now uses RBA historical exchange rates "
+        "💡 **Enhanced Features:** This calculator uses your RBA historical exchange rates "
         "for accurate AUD conversion and ATO-compliant reporting!"
     )
 
