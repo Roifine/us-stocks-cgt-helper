@@ -372,7 +372,7 @@ def process_csv_files_enhanced(existing_transactions, uploaded_transactions, fin
     cutoff_date = datetime(fy_year, 6, 30)
     
     cost_basis_dict, fifo_log, conversion_errors = apply_hybrid_fifo_processing_with_aud(
-        combined_df, aud_converter, cutoff_date
+    combined_df, aud_converter, None  # Don't filter again - we already did it in CSV loading
     )
     
     if not cost_basis_dict:
